@@ -1,0 +1,77 @@
+#!/bin/bash
+
+## This script creates a "repository key".  This key is stored, encrypted, within a special folder
+## that the agent knows to look inside of when decrypting secrets.
+
+# Load common tools
+CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/common.sh"
+
+# Get the signing key
+if [[ "$#" -ge "1" ]]; then
+    PUBLIC_KEY_PATH="${1}"
+    echo "Using public key path ${PUBLIC_KEY_PATH}"
+else
+    read -p 'Public keyfile path: ' PUBLIC_KEY_PATH
+fi
+
+# Double-check that this is a valid public key
+if ! is_rsa_public_key "${PUBLIC_KEY_PATH}"; then
+    die "Not a valid RSA public key: '${PUBLIC_KEY_PATH}'"
+fi
+
+
+# Get the repository root
+if [[ "$#" -ge "2" ]]; then
+    REPO_ROOT="${2}"
+else
+    # If the user is running this from within a repository that is not `cryptic-buildkite-plugin`, then use it!
+    REPO_ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
+    if [[ -n ${REPO_ORIGIN_URL} ]] && [[ "${REPO_ORIGIN_URL}" != *cryptic-buildkite-plugin* ]]; then
+        REPO_ROOT="$(git rev-parse --show-toplevel)"
+        echo "Autodetected repository with origin '${REPO_ORIGIN_URL}'"
+    else
+        read -p 'Repository location: ' REPO_ROOT
+    fi
+fi
+
+# Trim trailing slashes, because they're ugly
+REPO_ROOT="${REPO_ROOT%%+(/)}"
+echo "Using repository root ${REPO_ROOT}"
+
+# Don't continue running if the repository doesn't contain a `.buildkite` folder.
+# We require this to exist, which should be the case in general.
+if [[ ! -d "${REPO_ROOT}/.buildkite" ]]; then
+    die "${REPO_ROOT}/.buildkite does not exist; assuming something is wrong!"
+fi
+
+# Now that we've got `PUBLIC_KEY_PATH` and `REPO_ROOT`, let's check to see if this key has already been added:
+RSA_FINGERPRINT=$(rsa_fingerprint "${PUBLIC_KEY_PATH}")
+REPO_KEY_PATH="${REPO_ROOT}/.buildkite/cryptic_repo_keys/repo_key.${RSA_FINGERPRINT:0:8}"
+if [[ -f "${REPO_KEY_PATH}" ]]; then
+    die "Key already added to repository ${REPO_ROOT} at ${REPO_KEY_PATH}!"
+fi
+
+# If it hasn't been added, let's next check to see if there are any other encrypted keys already deployed:
+if compgen -G "${REPO_ROOT}/.buildkite/cryptic_repo_keys/repo_key.*" ; then
+    # TODO: Write a tool to add more encrypted keys to this 
+    die "Other keys already deployed; you should manually decrypt and re-encrypt the repo key instead"
+fi
+
+# Let's generate a new key and write it out.  We generate 128 bytes of random gibberish
+# and call that an AES key, encrypt it with our RSA key, and store that out to the repo.
+echo "Generating 1024-bit AES key in ${REPO_KEY_PATH}..."
+mkdir -p "${REPO_ROOT}/.buildkite/cryptic_repo_keys"
+gen_encrypted_aes_key "${PUBLIC_KEY_PATH}" > "${REPO_KEY_PATH}"
+
+cat <<-EOF
+
+    Congratulations, you now have an encrypted, symmetric AES key stored at:
+
+        ${REPO_KEY_PATH}
+
+    This key will be used to encrypt/decrypt secrets within your repository, and it is intended
+    to be committed into your repository as-is.
+
+    Refer to the top-level README.md for the next step in setting up your repository.
+EOF

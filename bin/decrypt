@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+
+## This file exists just as a simple sanity check for the user, and for debugging purposes.
+
+# Load common tools
+CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/common.sh"
+
+if ! which shyaml >/dev/null 2>/dev/null; then
+    die "We require shyaml to be installed for YAML parsing"
+fi
+
+# This reads in command-line parameters such as PRIVATE_KEY_PATH, REPO_ROOT, etc...
+source "${CRYPTIC_REPO}/lib/encrypt_decrypt_prologue.sh"
+
+# Get the `.yaml` file
+if [[ "$#" -ge 3 ]]; then
+    YAML_PATH="${3}"
+else
+    read -p 'pipeline.yaml file: ' YAML_PATH
+fi
+
+# YAML_PATH can be either a REPO_ROOT-relative path, or an absolute path
+if [[ "${YAML_PATH}" != "${REPO_ROOT}"* ]] && [[ "${YAML_PATH}" == /* ]]; then
+    die "File path must be either a repo-relative path, or an absolute path within the repo root"
+fi
+YAML_PATH="${YAML_PATH#${REPO_ROOT}/}"
+
+# Extract the `variables:` section of a cryptic `pipeline.yml` plugin section
+function extract_encrypted_variables() {
+    # Iterate over the steps in the yaml file
+    (shyaml get-values-0 steps <"${YAML_PATH}" || true) |
+    while IFS='' read -r -d '' STEP; do
+        # For each step, get its list of plugins
+        (shyaml get-values-0 plugins <<<"${STEP}" 2>/dev/null || true) |
+        while IFS='' read -r -d '' PLUGIN; do
+            # For each plugin, if its `cryptic`, extract the variables and files
+            if [[ "${PLUGIN}" == staticfloat/cryptic* ]]; then
+                (shyaml get-values-0 variables <<<"${PLUGIN}" 2>/dev/null || true) |
+                while IFS='' read -r -d '' VAR; do
+                    printf "%s\n" "${VAR}"
+                done
+            fi
+        done
+    done    
+}
+
+# Extract the `files:` section of a cryptic `pipeline.yml` plugin section
+function extract_encrypted_files() {
+    # Iterate over the steps in the yaml file
+    (shyaml get-values-0 steps <"${1}" || true) |
+    while IFS='' read -r -d '' STEP; do
+        # For each step, get its list of plugins
+        (shyaml get-values-0 plugins <<<"${STEP}" 2>/dev/null || true) |
+        while IFS='' read -r -d '' PLUGIN; do
+            # For each plugin, if its `cryptic`, extract the variables and files
+            if [[ "${PLUGIN}" == staticfloat/cryptic* ]]; then
+                (shyaml get-values-0 files <<<"${PLUGIN}" 2>/dev/null || true) |
+                while IFS='' read -r -d '' FILE; do
+                    FILE="$(echo ${FILE} | tr -d '"')"
+                    printf "%s\n" "${FILE}"
+                done
+            fi
+        done
+    done    
+}
+
+# Extract files and variables from the .yml file
+readarray -t ENCRYPTED_FILES < <(extract_encrypted_files "${YAML_PATH}")
+readarray -t ENCRYPTED_VARIABLES_PAIRED < <(extract_encrypted_variables "${YAML_PATH}")
+
+# Split pairs into name/values for environment variables
+declare -A ENCRYPTED_VARIABLES=()
+for PAIR in "${ENCRYPTED_VARIABLES_PAIRED[@]}"; do
+    NAME="$(echo ${PAIR%%=*} | tr -d '"')"
+    VALUE="$(echo ${PAIR#*=} | tr -d '"')"
+    ENCRYPTED_VARIABLES["${NAME}"]="${VALUE}"
+done
+
+
+# Start printing out the helpful debugging messages
+cat <<-EOD
+    Parsed out ${#ENCRYPTED_VARIABLES[@]} encrypted variables, ${#ENCRYPTED_FILES[@]} files
+    When running with appropriate keys setup, the cryptic buildkite plugin will export
+    the following environment variables:
+
+EOD
+
+# Decrypt encrypted variables
+for KEY in "${!ENCRYPTED_VARIABLES[@]}"; do
+    VALUE="$(base64dec <<<"${ENCRYPTED_VARIABLES["${KEY}"]}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
+    echo "      -> ${KEY}=${VALUE}"
+done
+
+# Spacer for visual blocking
+cat <<-EOD
+
+
+    And the following files:
+EOD
+
+# Decrypt actual files
+for FILE_PATH in "${ENCRYPTED_FILES[@]}"; do
+    ENC_FILE_PATH="${REPO_ROOT}/${FILE_PATH}.encrypted"
+    if [[ ! -f "${ENC_FILE_PATH}" ]]; then
+        die "Requested to decrypt '${FILE_PATH}.encrypted' but it does not exist inside of ${REPO_ROOT}!"
+    fi
+
+    SKIPPED_MSG=""
+    if [[ ! -f "${REPO_ROOT}/${FILE_PATH}" ]]; then
+        decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <"${ENC_FILE_PATH}" >"${REPO_ROOT}/${FILE_PATH}"
+    else
+        SKIPPED_MSG=", skipped"
+    fi
+
+    echo "      -> ${FILE_PATH} ($(filesize "${REPO_ROOT}/${FILE_PATH}") bytes${SKIPPED_MSG})"
+done

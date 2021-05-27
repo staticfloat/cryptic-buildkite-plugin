@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+## Encrypt a variable for embedding directly within a `pipeline.yml` file.
+
+# Load common tools
+CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/common.sh"
+
+# This reads in command-line parameters such as PRIVATE_KEY_PATH, REPO_ROOT, etc...
+source "${CRYPTIC_REPO}/lib/encrypt_decrypt_prologue.sh"
+
+# Get the variable name and value
+if [[ "$#" -ge 3 ]]; then
+    SECRET_NAME="${3}"
+else
+    read -p 'Variable name: ' SECRET_NAME
+fi
+
+# Read in secret value
+if [ "$#" -ge 4 ]; then
+    SECRET_VALUE="${4}"
+else
+    read -sp 'Secret value: ' SECRET_VALUE
+    echo "${SECRET_VALUE}" | sed 's/./*/g'
+fi
+
+# Do the actual encryption
+ENCRYPTED_SECRET_VALUE="$(decrypt_aes_key_then_encrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <<<"${SECRET_VALUE}" | base64enc)"
+
+cat <<-EOD
+
+    Congratulations, you have successfully encrypted a secret variable.
+
+    You should add the following plugin to the step you want to have access to the secret.
+    Be sure to minimize the number of steps that have access to this secret information, as
+    for true security you should lock down the CI configuration through treehashing your
+    repository's pipeline.yaml files.  See the top-level README.md for more information on
+    locking down CI configuration and next steps.
+    
+    plugins:
+        - staticfloat/cryptic:
+          variables:
+            - ${SECRET_NAME}="${ENCRYPTED_SECRET_VALUE}"
+
+EOD

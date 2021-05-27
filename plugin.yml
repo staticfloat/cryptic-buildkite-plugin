@@ -1,0 +1,9 @@
+name: Cryptic
+description: Deploy encrypted files to public repositories
+author: https://github.com/staticfloat
+configuration:
+  variables:
+    type: array
+  files:
+    type: array
+  additionalProperties: false

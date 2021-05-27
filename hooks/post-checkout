@@ -1,0 +1,57 @@
+#!/bin/bash
+
+## post-checkout hook: This hook performs the actual decryption of secrets
+
+# Load common tools
+CRYPTIC_REPO="$( cd "$( dirname "$( dirname "${BASH_SOURCE[0]}" )" )" &> /dev/null && pwd )"
+source "${CRYPTIC_REPO}/lib/common.sh"
+
+# If we're not authorized, quit out immediately
+if [[ "${BUILDKITE_PLUGIN_CRYPTIC_PRIVILEGED:-false}" != "true" ]]; then
+    exit 0
+fi
+
+# If we think we are authorized, let's check to make sure that our secret keys are actually valid
+PRIVATE_KEY_PATH=$(mktemp)
+base64dec <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PRIVATE_KEY_SECRET}" >"${PRIVATE_KEY_PATH}"
+PUBLIC_KEY_PATH=$(mktemp)
+base64dec <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PUBLIC_KEY_SECRET}" >"${PUBLIC_KEY_PATH}"
+
+# Search for repository key based off of the private key fingerprint
+RSA_FINGERPRINT=$(rsa_fingerprint "${PRIVATE_KEY_PATH}")
+REPO_KEY_PATH=".buildkite/cryptic_repo_keys/repo_key.${RSA_FINGERPRINT:0:8}"
+if [[ ! -f "${REPO_KEY_PATH}" ]]; then
+    die "Cannot find expected repo key at '${REPO_KEY_PATH}'!  Ensure you have added the repository key to ${BUILDKITE_REPO}"
+fi
+UNENCRYPTED_REPO_KEY_PATH=$(mktemp)
+decrypt_rsa "${PRIVATE_KEY_PATH}" < "${REPO_KEY_PATH}" > "${UNENCRYPTED_REPO_KEY_PATH}"
+
+
+# Collect lists of files and variables we need to decrypt
+readarray -d '' -t ENCRYPTED_VARIABLES < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_VARIABLES")
+readarray -d '' -t ENCRYPTED_FILES < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_FILES")
+
+# Decrypt each file
+echo "--- :unlock: Decrypt files"
+for FILE_PATH in "${ENCRYPTED_FILES[@]}"; do
+    ENC_FILE_PATH="${FILE_PATH}.encrypted"
+    if [[ ! -f "${ENC_FILE_PATH}" ]]; then
+        die "Unable to find file '${ENC_FILE_PATH}' which we have been asked to decrypt!"
+    fi
+
+    echo " -> Decrypting ${FILE_PATH}"
+    decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <"${ENC_FILE_PATH}" >"${FILE_PATH}"
+done
+
+# Decrypt each secret environment variable
+echo "--- :unlock: Decrypt environment variables"
+for VARNAME in "${ENCRYPTED_VARIABLES[@]}"; do
+    SECRET_VALUE="${!VARNAME}"
+
+    echo " -> Decrypting ${VARNAME}"
+    VALUE="$(base64dec <<<"${!VARNAME}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
+    export $(echo "$(echo "${VARNAME}")=${VALUE}")
+done
+
+# Clean up public/private key paths
+rm -f "${PRIVATE_KEY_PATH}" "${PUBLIC_KEY_PATH}" "${UNENCRYPTED_REPO_KEY_PATH}"

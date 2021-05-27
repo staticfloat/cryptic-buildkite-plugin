@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+
+## Encrypt a variable for embedding directly within a `pipeline.yml` file.
+
+# Load common tools
+CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/common.sh"
+
+# This reads in command-line parameters such as PRIVATE_KEY_PATH, REPO_ROOT, etc...
+source "${CRYPTIC_REPO}/lib/encrypt_decrypt_prologue.sh"
+
+# Get the variable name and value
+if [[ "$#" -ge 3 ]]; then
+    FILE_PATH="${3}"
+else
+    read -p 'File to encrypt: ' FILE_PATH
+fi
+
+# FILE_PATH can be either a REPO_ROOT-relative path, or an absolute path
+if [[ "${FILE_PATH}" != "${REPO_ROOT}"* ]] && [[ "${FILE_PATH}" == /* ]]; then
+    die "File path must be either a repo-relative path, or an absolute path within the repo root"
+fi
+FILE_PATH="${FILE_PATH#${REPO_ROOT}/}"
+
+# Check to make sure there's not already a `.encrypted` file:
+ENC_FILE_PATH="${REPO_ROOT}/${FILE_PATH}.encrypted"
+if [[ -f "${ENC_FILE_PATH}" ]]; then
+	die "Encrypted file path '${ENC_FILE_PATH}' already exists!"
+fi
+
+# Do the actual encryption
+decrypt_aes_key_then_encrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <"${REPO_ROOT}/${FILE_PATH}" >"${ENC_FILE_PATH}"
+
+cat <<-EOD
+    Congratulations, you have successfully encrypted a secret.
+
+    The file has been encrypted into a `.encrypted` file; if you had previously checked
+	the unencrypted file into your git repository, you must delete its history to truly
+	eliminate it; I suggest using a tool such as the excellent `git-filter-repo` tool
+	to do this: https://github.com/newren/git-filter-repo
+
+	You should furthermore add this file to a `.gitignore`, so that the unencrypted file
+	does not cause the git repository to appear dirty (and to prevent accidental check-
+	ins in the future).
+
+    You should add the following plugin to the step you want to have access to the secret.
+    Be sure to minimize the number of steps that have access to this secret information, as
+    for true security you should lock down the CI configuration through treehashing your
+    repository's pipeline.yaml files.  See the top-level README.md for more information on
+    locking down CI configuration and next steps.
+    
+    plugins:
+        - staticfloat/cryptic:
+          files:
+            - ${FILE_PATH}
+EOD
