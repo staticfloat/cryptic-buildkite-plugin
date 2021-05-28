@@ -38,7 +38,7 @@ for PIPELINE_IDX in "${!LOCKED_PIPELINES[@]}"; do
     TREEHASH_VAR="BUILDKITE_PLUGIN_CRYPTIC_LOCKED_PIPELINES_${PIPELINE_IDX}_HASH"
     PIPELINE_TREEHASH="${!TREEHASH_VAR}"
     if [[ "${PIPELINE_TREEHASH}" != "${FULL_TREEHASH}" ]]; then
-        die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash check!\nExpected:\n    '${PIPELINE_TREEHASH}'\nCalculated:\n    '${FULL_TREEHASH}'!"
+        die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash check!  Expected: **${PIPELINE_TREEHASH}** but calculated: **${FULL_TREEHASH}**!"
     fi
 
     # If we passed, launch the pipeline!
