@@ -51,10 +51,10 @@ done
 echo "--- :unlock: Decrypt environment variables"
 for PAIR in "${ENCRYPTED_VARIABLES[@]}"; do
     VARNAME="$(echo ${PAIR%%=*} | tr -d '"')"
-    SECRET_VALUE="$(echo ${PAIR#*=} | tr -d '"')"
+    SECRET_VALUE_BASE64="$(echo ${PAIR#*=} | tr -d '"')"
 
     echo " -> Decrypting ${VARNAME}"
-    VALUE="$(base64dec <<<"${!VARNAME}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
+    VALUE="$(base64dec <<<"${SECRET_VALUE_BASE64}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
     
     export "${VARNAME}"="${VALUE}"
 done
