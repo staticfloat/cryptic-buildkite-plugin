@@ -217,10 +217,15 @@ function filesize() {
 
 function collect_buildkite_array() {
     PARAMETER_NAME="${1}"
+    SUFFIX="${2:-}"
+    if [[ -n "${SUFFIX}" ]] && [[ "${SUFFIX}" != _* ]]; then
+        SUFFIX="_${SUFFIX}"
+    fi
+
     local IDX=0
-    while [[ -v "${PARAMETER_NAME}_${IDX}" ]]; do
+    while [[ -v "${PARAMETER_NAME}_${IDX}${SUFFIX}" ]]; do
         # Fetch the pattern
-        VARNAME="${PARAMETER_NAME}_${IDX}"
+        VARNAME="${PARAMETER_NAME}_${IDX}${SUFFIX}"
         printf "%s\0" "${!VARNAME}"
 
         IDX=$((${IDX} + 1))

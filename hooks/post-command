@@ -18,5 +18,29 @@ if [[ "$BUILDKITE_COMMAND_EXIT_STATUS" != "0" ]]; then
     exit 0
 fi
 
-# Dump environment
-set | grep BUILDKITE_PLUGIN_CRYPTIC
+# Collect all the locked pipeline configurations we have
+readarray -d '' -t LOCKED_PIPELINES < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_LOCKED_PIPELINES" "PIPELINE")
+
+for PIPELINE_IDX in "${!LOCKED_PIPELINES[@]}"; do
+    PIPELINE_PATH="${LOCKED_PIPELINES[${PIPELINE_IDX}]}"
+
+    # Hash up the inputs
+    readarray -d '' -t PIPELINE_INPUTS < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_LOCKED_PIPELINES_${PIPELINE_IDX}_INPUTS")
+    INPUT_TREEHASHES=()
+    for PATTERN in "${PIPELINE_INPUTS[@]}"; do
+        INPUT_TREEHASHES+=( "$(collect_glob_pattern "${PATTERN}" | calc_treehash)" )
+    done
+
+    # Hash all treehashes together to get full input hash
+    FULL_TREEHASH=$(printf "%s" "${INPUT_TREEHASHES[@]}" | calc_shasum)
+
+    # Compare this with the known-good treehash
+    TREEHASH_VAR="BUILDKITE_PLUGIN_CRYPTIC_LOCKED_PIPELINES_${PIPELINE_IDX}_HASH"
+    PIPELINE_TREEHASH="${!TREEHASH_VAR}"
+    if [[ "${PIPELINE_TREEHASH}" != "${FULL_TREEHASH}" ]]; then
+        die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash check!  Expected '${PIPELINE_TREEHASH}' but calculated '${FULL_TREEHASH}'!"
+    fi
+
+    # If we passed, launch the pipeline!
+    buildkite-agent pipeline upload "${PIPELINE_PATH}"
+done
