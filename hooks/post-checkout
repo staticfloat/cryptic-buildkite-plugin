@@ -54,9 +54,10 @@ for VARNAME in "${ENCRYPTED_VARIABLES[@]}"; do
 
     echo " -> Decrypting ${VARNAME}"
     VALUE="$(base64dec <<<"${!VARNAME}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
-    set -x
+    
+    echo "VARNAME: ${VARNAME}"
+    echo "VALUE: ${VALUE}"
     export "${VARNAME}"="${VALUE}"
-    set +x
 done
 
 # Clean up public/private key paths
