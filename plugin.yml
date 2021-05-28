@@ -2,8 +2,18 @@ name: Cryptic
 description: Deploy encrypted files to public repositories
 author: https://github.com/staticfloat
 configuration:
-  variables:
-    type: array
-  files:
-    type: array
+  properties:
+    variables:
+      type: array
+    files:
+      type: array
+    locked_pipelines:
+      type: array
+      properties:
+        pipeline:
+          type: string
+        inputs:
+          type: array
+        treehash:
+          type: string
   additionalProperties: false

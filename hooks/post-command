@@ -1,0 +1,16 @@
+#!/bin/bash
+
+## post-command hook: This hook implements treehash verification and pipeline launching
+
+# Load common tools
+CRYPTIC_REPO="$( cd "$( dirname "$( dirname "${BASH_SOURCE[0]}" )" )" &> /dev/null && pwd )"
+source "${CRYPTIC_REPO}/lib/common.sh"
+
+# If we're not authorized, quit out immediately
+if [[ "${BUILDKITE_PLUGIN_CRYPTIC_PRIVILEGED:-false}" != "true" ]]; then
+    echo "Exiting immediately, as we're not privileged"
+    exit 0
+fi
+
+# Dump environment
+set | grep BUILDKITE_PLUGIN_CRYPTIC
