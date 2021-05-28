@@ -12,5 +12,11 @@ if [[ "${BUILDKITE_PLUGIN_CRYPTIC_PRIVILEGED:-false}" != "true" ]]; then
     exit 0
 fi
 
+# If the command hook failed, quit out immediately
+if [[ "$BUILDKITE_COMMAND_EXIT_STATUS" != "0" ]]; then
+    echo "Exiting immediately, as the command block reported an error"
+    exit 0
+fi
+
 # Dump environment
 set | grep BUILDKITE_PLUGIN_CRYPTIC
