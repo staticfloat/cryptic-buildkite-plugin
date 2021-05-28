@@ -24,4 +24,5 @@ Repository setup:
   4. Each repository that wants to utilize secrets must generate a repository key, using `bin/create_repo_key`.
     - This is a symmetric key, and it will be encrypted with the agent key created above.
     - Repositories can have the same repository key encrypted with multiple agent keys, to support multiple agent pools each with a different subset of allowed repository secret access.
-  5. Secret variables that should be 
+  5. Encrypt secret files/variables using `bin/encrypt_{file,variable}`, and add the relevant plugin stanzas to your pipeline.
+    - To ensure things are working correctly, you can use `bin/decrypt` to test out how things will be decoded.

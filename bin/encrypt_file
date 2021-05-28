@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-## Encrypt a variable for embedding directly within a `pipeline.yml` file.
+## Encrypt a file within a repository, creating a `${file}.encrypted` file.
+## Remember to `.gitignore` the original file path, and to purge it from git history if needed.
 
 # Load common tools
 CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
@@ -43,12 +44,12 @@ cat <<-EOD
 	does not cause the git repository to appear dirty (and to prevent accidental check-
 	ins in the future).
 
-    You should add the following plugin to the step you want to have access to the secret.
+    Add the following plugin stanza to the step you want to have access to the secret.
     Be sure to minimize the number of steps that have access to this secret information, as
     for true security you should lock down the CI configuration through treehashing your
     repository's pipeline.yaml files.  See the top-level README.md for more information on
     locking down CI configuration and next steps.
-    
+
     plugins:
         - staticfloat/cryptic:
           files:

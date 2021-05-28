@@ -8,6 +8,7 @@ source "${CRYPTIC_REPO}/lib/common.sh"
 
 # If we're not authorized, quit out immediately
 if [[ "${BUILDKITE_PLUGIN_CRYPTIC_PRIVILEGED:-false}" != "true" ]]; then
+    echo "Exiting immediately, as we're not privileged"
     exit 0
 fi
 
@@ -38,6 +39,9 @@ for FILE_PATH in "${ENCRYPTED_FILES[@]}"; do
     if [[ ! -f "${ENC_FILE_PATH}" ]]; then
         die "Unable to find file '${ENC_FILE_PATH}' which we have been asked to decrypt!"
     fi
+    if [[ -f "${FILE_PATH}" ]]; then
+        die "Decrypted file '${FILE_PATH}' already exists in repository?!"
+    fi
 
     echo " -> Decrypting ${FILE_PATH}"
     decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <"${ENC_FILE_PATH}" >"${FILE_PATH}"
@@ -50,7 +54,7 @@ for VARNAME in "${ENCRYPTED_VARIABLES[@]}"; do
 
     echo " -> Decrypting ${VARNAME}"
     VALUE="$(base64dec <<<"${!VARNAME}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
-    export $(echo "$(echo "${VARNAME}")=${VALUE}")
+    export "${VARNAME}"="${VALUE}"
 done
 
 # Clean up public/private key paths

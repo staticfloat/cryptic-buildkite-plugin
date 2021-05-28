@@ -36,10 +36,9 @@ cat <<-EOD
     for true security you should lock down the CI configuration through treehashing your
     repository's pipeline.yaml files.  See the top-level README.md for more information on
     locking down CI configuration and next steps.
-    
+
     plugins:
         - staticfloat/cryptic:
           variables:
             - ${SECRET_NAME}="${ENCRYPTED_SECRET_VALUE}"
-
 EOD

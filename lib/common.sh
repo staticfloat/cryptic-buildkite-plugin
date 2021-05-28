@@ -147,6 +147,6 @@ function collect_buildkite_array() {
         VARNAME="${PARAMETER_NAME}_${IDX}"
         printf "%s\0" "${!VARNAME}"
 
-        VARIABLE_IDX=$((${VARIABLE_IDX} + 1))
+        IDX=$((${IDX} + 1))
     done
 }
