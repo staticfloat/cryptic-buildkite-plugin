@@ -26,7 +26,7 @@ for PIPELINE_IDX in "${!LOCKED_PIPELINES[@]}"; do
 
     # Hash up the inputs
     readarray -d '' -t PIPELINE_INPUTS < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_LOCKED_PIPELINES_${PIPELINE_IDX}_INPUTS")
-    INPUT_TREEHASHES=()
+    INPUT_TREEHASHES=( "$(calc_treehash <<<"${PIPELINE_PATH}")" )
     for PATTERN in "${PIPELINE_INPUTS[@]}"; do
         INPUT_TREEHASHES+=( "$(collect_glob_pattern "${PATTERN}" | calc_treehash)" )
     done
