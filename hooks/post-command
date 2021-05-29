@@ -21,6 +21,7 @@ fi
 # Collect all the locked pipeline configurations we have
 readarray -d '' -t LOCKED_PIPELINES < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_LOCKED_PIPELINES" "PIPELINE")
 
+SHOULD_FAIL=false
 for PIPELINE_IDX in "${!LOCKED_PIPELINES[@]}"; do
     PIPELINE_PATH="${LOCKED_PIPELINES[${PIPELINE_IDX}]}"
 
@@ -38,9 +39,17 @@ for PIPELINE_IDX in "${!LOCKED_PIPELINES[@]}"; do
     TREEHASH_VAR="BUILDKITE_PLUGIN_CRYPTIC_LOCKED_PIPELINES_${PIPELINE_IDX}_HASH"
     PIPELINE_TREEHASH="${!TREEHASH_VAR}"
     if [[ "${PIPELINE_TREEHASH}" != "${FULL_TREEHASH}" ]]; then
-        die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash check!  Expected: **${PIPELINE_TREEHASH}** but calculated: **${FULL_TREEHASH}**!"
+        # Execute `die` in a subshell so that we can print out failure messages for each pipeline,
+        # then fail out once at the end.
+        (die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash check!  Expected: **${PIPELINE_TREEHASH}** but calculated: **${FULL_TREEHASH}**!"; )
+        SHOULD_FAIL="true"
+    else
+        # If we passed, launch the pipeline!
+        buildkite-agent pipeline upload "${PIPELINE_PATH}"
     fi
-
-    # If we passed, launch the pipeline!
-    buildkite-agent pipeline upload "${PIPELINE_PATH}"
 done
+
+# This is used to allow us to fail at the end, after trying all pipelines
+if [[ "${SHOULD_FAIL}" != "false" ]]; then
+    exit 1
+fi
