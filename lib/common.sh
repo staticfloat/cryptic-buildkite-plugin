@@ -14,7 +14,7 @@ function die() {
         if [[ "$#" -gt 1 ]]; then
             CONTEXT="${2}"
         fi
-        buildkite-agent --context "${CONTEXT}" annotate --style=error "${1}"
+        buildkite-agent --context="${CONTEXT}" annotate --style=error "${1}"
     fi
     exit 1
 }
