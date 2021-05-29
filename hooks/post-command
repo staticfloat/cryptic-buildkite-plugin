@@ -41,10 +41,11 @@ for PIPELINE_IDX in "${!LOCKED_PIPELINES[@]}"; do
     if [[ "${PIPELINE_TREEHASH}" != "${FULL_TREEHASH}" ]]; then
         # Execute `die` in a subshell so that we can print out failure messages for each pipeline,
         # then fail out once at the end.
-        (die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash check!  Expected: **${PIPELINE_TREEHASH}** but calculated: **${FULL_TREEHASH}**!"; )
+        (die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash check!  Expected: **${PIPELINE_TREEHASH}** but calculated: **${FULL_TREEHASH}**!"; ) || true
         SHOULD_FAIL="true"
     else
         # If we passed, launch the pipeline!
+        echo " -> Launching ${PIPELINE_PATH}"
         buildkite-agent pipeline upload "${PIPELINE_PATH}"
     fi
 done
