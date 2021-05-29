@@ -9,7 +9,12 @@ shopt -s globstar
 function die() {
     echo "ERROR: ${1}" >&2
     if which buildkite-agent >/dev/null 2>/dev/null; then
-        buildkite-agent annotate --style=error "${1}"
+        # By default, the annotation context is unique to the message
+        local CONTEXT=$(echo "${1}" | ${SHASUM})
+        if [[ "$#" -gt 1 ]]; then
+            CONTEXT="${2}"
+        fi
+        buildkite-agent --context "${CONTEXT}" annotate --style=error "${1}"
     fi
     exit 1
 }
