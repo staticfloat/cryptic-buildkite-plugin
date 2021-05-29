@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+## This file exists just as a simple sanity check for the user, and for debugging purposes.
+
+# Load common tools
+CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/common.sh"
+
+# This reads in command-line parameters such as PRIVATE_KEY_PATH, REPO_ROOT, etc...
+source "${CRYPTIC_REPO}/lib/encrypt_decrypt_prologue.sh"
+
+# This loads in YAML extraction prologues
+source "${CRYPTIC_REPO}/lib/yaml_extraction_prologue.sh"
+
+# We need the public key, not the private key.  But since we're lazy and don't want to change
+# the parsing rules, we'll just re-generate the public key from the private one here.
+PUBLIC_KEY_PATH=$(mktemp)
+openssl rsa -in "${PRIVATE_KEY_PATH}" -pubout -out "${PUBLIC_KEY_PATH}" 2>/dev/null
+
+# Extract treehash glob patterns from the YAML
+readarray -t PIPELINE_TREEHASH_PAIRS < <(calculate_locked_pipeline_treehashes "${YAML_PATH}")
+readarray -t PIPELINE_SIGNATURES < <(extract_pipeline_signatures "${YAML_PATH}")
+
+# Start printing out the helpful debugging messages
+cat <<-EOD
+    Parsed out ${#PIPELINE_TREEHASH_PAIRS[@]} pipelines being launched.
+    Verifying signatures...
+
+EOD
+
+# Decrypt encrypted variables
+for PIPELINE_IDX in "${!PIPELINE_TREEHASH_PAIRS[@]}"; do
+    PAIR="${PIPELINE_TREEHASH_PAIRS[${PIPELINE_IDX}]}"
+    PIPELINE_PATH="$(echo ${PAIR%%&*} | tr -d '"')"
+    PIPELINE_TREEHASH="$(echo ${PAIR#*&} | tr -d '"')"
+
+    # Write embedded signature out to file
+    SIGNATURE_FILE=$(mktemp)
+    base64dec <<<"${PIPELINE_SIGNATURES[${PIPELINE_IDX}]}" >"${SIGNATURE_FILE}"
+    if echo "${PIPELINE_TREEHASH}" | check_rsa_signature "${PUBLIC_KEY_PATH}" "${SIGNATURE_FILE}"; then
+        echo "        ${PIPELINE_PATH}: ✔️"
+    else
+        echo "        ${PIPELINE_PATH}: ❌"
+    fi
+    rm -f "${SIGNATURE_FILE}"
+done
+
+# Clean up some temporary files
+rm -f "${PUBLIC_KEY_PATH}"

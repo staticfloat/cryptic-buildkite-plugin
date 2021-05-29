@@ -70,7 +70,7 @@ function sign_rsa() {
 }
 # Verify an RSA signature using the RSA key ($1) and the signature ($2), both as files
 function check_rsa_signature() {
-    openssl dgst -sha256 -verify "${1}" -signature "${2}"
+    openssl dgst -sha256 -verify "${1}" -signature "${2}" >/dev/null
 }
 
 # Get the SHA256 hash of an RSA key (autodetecting whether its public or private)

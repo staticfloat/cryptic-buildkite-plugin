@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+## This file exists just as a simple sanity check for the user, and for debugging purposes.
+
+# Load common tools
+CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/common.sh"
+
+# This reads in command-line parameters such as PRIVATE_KEY_PATH, REPO_ROOT, etc...
+source "${CRYPTIC_REPO}/lib/encrypt_decrypt_prologue.sh"
+
+# This loads in YAML extraction prologues
+source "${CRYPTIC_REPO}/lib/yaml_extraction_prologue.sh"
+
+
+# Extract treehash glob patterns from the YAML
+readarray -t PIPELINE_TREEHASH_PAIRS < <(calculate_locked_pipeline_treehashes "${YAML_PATH}")
+
+# Start printing out the helpful debugging messages
+cat <<-EOD
+    Parsed out ${#PIPELINE_TREEHASH_PAIRS[@]} pipelines being launched.
+    Printing out exemplar plugin stanzas:
+
+EOD
+
+# Decrypt encrypted variables
+for PAIR in "${PIPELINE_TREEHASH_PAIRS[@]}"; do
+    PIPELINE_PATH="$(echo ${PAIR%%&*} | tr -d '"')"
+    PIPELINE_TREEHASH="$(echo ${PAIR#*&} | tr -d '"')"
+    PIPELINE_SIGNATURE="$(sign_rsa "${PRIVATE_KEY_PATH}" <<<"${PIPELINE_TREEHASH}" | base64enc)"
+    cat <<-EOD
+            - pipeline: ${PIPELINE_PATH}
+              signature: ${PIPELINE_SIGNATURE}
+              ...
+
+EOD
+done

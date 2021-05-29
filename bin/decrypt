@@ -6,60 +6,11 @@
 CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
 source "${CRYPTIC_REPO}/lib/common.sh"
 
-if ! which shyaml >/dev/null 2>/dev/null; then
-    die "We require shyaml to be installed for YAML parsing"
-fi
-
 # This reads in command-line parameters such as PRIVATE_KEY_PATH, REPO_ROOT, etc...
 source "${CRYPTIC_REPO}/lib/encrypt_decrypt_prologue.sh"
 
-# Get the `.yaml` file
-if [[ "$#" -ge 3 ]]; then
-    YAML_PATH="${3}"
-else
-    read -p 'pipeline.yaml file: ' YAML_PATH
-fi
-
-# YAML_PATH can be either a REPO_ROOT-relative path, or an absolute path
-if [[ "${YAML_PATH}" != "${REPO_ROOT}"* ]] && [[ "${YAML_PATH}" == /* ]]; then
-    die "File path must be either a repo-relative path, or an absolute path within the repo root"
-fi
-YAML_PATH="${YAML_PATH#${REPO_ROOT}/}"
-
-# Extract the `variables:` section of a cryptic `pipeline.yml` plugin section
-function extract_encrypted_variables() {
-    # Iterate over the steps in the yaml file
-    (shyaml get-values-0 steps <"${YAML_PATH}" || true) |
-    while IFS='' read -r -d '' STEP; do
-        # For each step, get its list of plugins
-        (shyaml get-values-0 plugins <<<"${STEP}" 2>/dev/null || true) |
-        while IFS='' read -r -d '' PLUGIN; do
-            # For each plugin, if its `cryptic`, extract the variables
-            (shyaml get-values-0 "staticfloat/cryptic.variables" <<<"${PLUGIN}" 2>/dev/null || true) |
-            while IFS='' read -r -d '' VAR; do
-                printf "%s\n" "${VAR}"
-            done
-        done
-    done    
-}
-
-# Extract the `files:` section of a cryptic `pipeline.yml` plugin section
-function extract_encrypted_files() {
-    # Iterate over the steps in the yaml file
-    (shyaml get-values-0 steps <"${1}" || true) |
-    while IFS='' read -r -d '' STEP; do
-        # For each step, get its list of plugins
-        (shyaml get-values-0 plugins <<<"${STEP}" 2>/dev/null || true) |
-        while IFS='' read -r -d '' PLUGIN; do
-            # For each plugin, if its `cryptic`, extract the files
-            (shyaml get-values-0 "staticfloat/cryptic.files" <<<"${PLUGIN}" 2>/dev/null || true) |
-            while IFS='' read -r -d '' FILE; do
-                FILE="$(echo ${FILE} | tr -d '"')"
-                printf "%s\n" "${FILE}"
-            done
-        done
-    done    
-}
+# This loads in YAML extraction prologues
+source "${CRYPTIC_REPO}/lib/yaml_extraction_prologue.sh"
 
 # Extract files and variables from the .yml file
 readarray -t ENCRYPTED_FILES < <(extract_encrypted_files "${YAML_PATH}")

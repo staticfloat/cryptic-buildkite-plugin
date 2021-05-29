@@ -18,6 +18,13 @@ if [[ "$BUILDKITE_COMMAND_EXIT_STATUS" != "0" ]]; then
     exit 0
 fi
 
+# Extract the public key
+PUBLIC_KEY_PATH=$(mktemp)
+base64dec <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PUBLIC_KEY_SECRET}" >"${PUBLIC_KEY_PATH}"
+if ! is_rsa_private_key "${PRIVATE_KEY_PATH}"; then
+    die "Invalid RSA private key passed from agent environment hook!"
+fi
+
 # Collect all the locked pipeline configurations we have
 readarray -d '' -t LOCKED_PIPELINES < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_LOCKED_PIPELINES" "PIPELINE")
 
@@ -33,15 +40,16 @@ for PIPELINE_IDX in "${!LOCKED_PIPELINES[@]}"; do
     done
 
     # Hash all treehashes together to get full input hash
-    FULL_TREEHASH=$(printf "%s" "${INPUT_TREEHASHES[@]}" | calc_shasum)
+    FULL_TREEHASH="$(printf "%s" "${INPUT_TREEHASHES[@]}" | calc_shasum)"
 
     # Compare this with the known-good treehash
-    TREEHASH_VAR="BUILDKITE_PLUGIN_CRYPTIC_LOCKED_PIPELINES_${PIPELINE_IDX}_HASH"
-    PIPELINE_TREEHASH="${!TREEHASH_VAR}"
-    if [[ "${PIPELINE_TREEHASH}" != "${FULL_TREEHASH}" ]]; then
+    SIGNATURE_VAR="BUILDKITE_PLUGIN_CRYPTIC_LOCKED_PIPELINES_${PIPELINE_IDX}_SIGNATURE"
+    SIGNATURE_FILE=$(mktemp)
+    base64dec <<<"${!SIGNATURE_VAR}" >"${SIGNATURE_FILE}"
+    if ! echo "${FULL_TREEHASH}" | check_rsa_signature "${PUBLIC_KEY_PATH}" "${SIGNATURE_FILE}"; then
         # Execute `die` in a subshell so that we can print out failure messages for each pipeline,
-        # then fail out once at the end.
-        (die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash check!  Expected: **${PIPELINE_TREEHASH}** but calculated: **${FULL_TREEHASH}**!"; ) || true
+        # then fail out once at the end, ignoring the `exit` and failure that it creates.
+        (die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash signature check!  You may need to re-run cryptic/bin/sign_treehashes!"; ) || true
         SHOULD_FAIL="true"
     else
         # If we passed, launch the pipeline!
