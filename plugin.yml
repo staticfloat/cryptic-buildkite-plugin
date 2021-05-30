@@ -3,19 +3,33 @@ description: Deploy encrypted files to public repositories
 author: https://github.com/staticfloat
 configuration:
   properties:
+    # base64-encoded, encrypted variables that will be exported to the command block 
+    # See `bin/encrypt_variable` for how to generate these.
     variables:
       type: array
+    # Files that exist in the repository encrypted (as `${file_path}.encrypted` files)
+    # See `bin/encrypt_file` for how to generate these.
     files:
       type: array
+
+    # Child pipelines that we should propagate credentials to, after verifying treehashes
     locked_pipelines:
       type: array
       properties:
+        # The path of the `pipeline.yml` file to upload
         pipeline:
           type: string
+        # The list globs that should be verified (in addition to the pipeline itself)
         inputs:
           type: array
+
+        # A base64-encoded signature of the above inputs' treehash.
+        # See `bin/sign_treehashes` for how to generate this.
         signature:
           type: string
+        # The same as `signature`, but a file to the raw-encoded signature.
+        # Use this if you want to allow changing the signature without modifying
+        # this pipeline (e.g. for multiple links in a chain of signature verifications)
         signature_file:
           type: string
   additionalProperties: false
