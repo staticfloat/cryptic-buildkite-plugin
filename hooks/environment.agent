@@ -64,6 +64,7 @@ fi
 
 # All we do is export a base64-encoded form of the keys for later consumption by the cryptic plugin
 function set_cryptic_privileged() {
+    echo "Privileged build detected; unlocking private key"
     export BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PRIVATE_KEY_SECRET="$(openssl base64 -e -A < "${PRIVATE_KEY_PATH}")"
     export BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PUBLIC_KEY_SECRET="$(openssl base64 -e -A < "${PUBLIC_KEY_PATH}")"
     export BUILDKITE_PLUGIN_CRYPTIC_PRIVILEGED=true
