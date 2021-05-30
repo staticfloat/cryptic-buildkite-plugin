@@ -45,20 +45,37 @@ for PIPELINE_IDX in "${!LOCKED_PIPELINES[@]}"; do
     # Hash all treehashes together to get full input hash
     FULL_TREEHASH="$(printf "%s" "${INPUT_TREEHASHES[@]}" | calc_shasum)"
 
-    # Compare this with the known-good treehash
+    # Verify this with the treehash signature
     SIGNATURE_VAR="BUILDKITE_PLUGIN_CRYPTIC_LOCKED_PIPELINES_${PIPELINE_IDX}_SIGNATURE"
-    SIGNATURE_FILE=$(mktemp)
-    base64dec <<<"${!SIGNATURE_VAR}" >"${SIGNATURE_FILE}"
+    SIGNATURE_FILE_VAR="BUILDKITE_PLUGIN_CRYPTIC_LOCKED_PIPELINES_${PIPELINE_IDX}_SIGNATURE_FILE"
+
+    # Die if we don't have any signatures
+    if [[ ! -v "${SIGNATURE_VAR}" ]] && [[ ! -v "${SIGNATURE_FILE_VAR}" ]]; then
+        # Execute `die` in a subshell so that we can print out failure messages for each pipeline,
+        # then fail out once at the end, ignoring the `exit` and failure that it creates.
+        (die "Locked pipeline '${PIPELINE_PATH}' must define either 'signature' or 'siganture_file'"; ) || true
+        SHOULD_FAIL=true
+        continue
+    fi
+
+    # If both are provided, just use the signature_file
+    if [[ -v "${SIGNATURE_FILE_VAR}" ]]; then
+        SIGNATURE_FILE="${!SIGNATURE_FILE_VAR}"
+    else
+        SIGNATURE_FILE=$(mktemp)
+        base64dec <<<"${!SIGNATURE_VAR}" >"${SIGNATURE_FILE}"
+    fi
     if ! echo "${FULL_TREEHASH}" | check_rsa_signature "${PUBLIC_KEY_PATH}" "${SIGNATURE_FILE}"; then
         # Execute `die` in a subshell so that we can print out failure messages for each pipeline,
         # then fail out once at the end, ignoring the `exit` and failure that it creates.
         (die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash signature check!  You may need to re-run cryptic/bin/sign_treehashes!"; ) || true
-        SHOULD_FAIL="true"
-    else
-        # If we passed, launch the pipeline!
-        echo " -> Launching ${PIPELINE_PATH}"
-        buildkite-agent pipeline upload "${PIPELINE_PATH}"
+        SHOULD_FAIL=true
+        continue
     fi
+
+    # If we passed, launch the pipeline!
+    echo " -> Launching ${PIPELINE_PATH}"
+    buildkite-agent pipeline upload "${PIPELINE_PATH}"
 done
 
 unset BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET
