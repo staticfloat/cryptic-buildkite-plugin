@@ -34,7 +34,7 @@ Repository setup:
 
 ## Utilities
 
-This repository has a few utility scripts:
+This repository has a few utility scripts.  Note that most of them are most convenient when invoked from within your repository.
 
 * [`create_agent_keypair`](bin/create_agent_keypair): Generates the `agent.key` and `agent.pub` files.
 
@@ -42,6 +42,8 @@ This repository has a few utility scripts:
 
 * [`encrypt_file`](bin/encrypt_file)/[`encrypt_variable](bin/encrypt_variable): Encrypt files/text strings using the repository key.  Files get stored as `.encrypted` files, and variables can be embedded directly within `pipeline.yml` files.
 
-* [`decrypt`](bin/decrypt): Testing tool to ensure that your encrypted values are round-tripping properly.
+* [`decrypt`](bin/decrypt): Testing tool to ensure that your encrypted values are round-tripping properly.  Decrypts files within the repository (e.g. decrypting `foo.encrypted` -> `foo`) and prints out environment variables.
 
-* [`sign_treehashes`](bin/sign_treehashes): Consume the `
+* [`sign_treehashes`](bin/sign_treehashes): Consume a `pipeline.yml` file, determine the inputs to the treehashes on-disk, and output signed treehashes.
+
+* [`verify_treehashes`](bin/verify_treehashes): Testing tool to verify that the signatures within the given `pipeline.yml` file match the treehash as calculated on-disk.
