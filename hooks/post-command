@@ -35,7 +35,7 @@ for PIPELINE_PATH in "${UNSIGNED_PIPELINES[@]}"; do
 done
 
 # Generate signed token for use in triggering future pipelines
-export BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET="$(sign_rsa "${PRIVATE_KEY_PATH}" <<<"${BUILDKITE_INITIAL_JOB_ID}" | base64enc)"
+export BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET="$(sign_rsa "${PUBLIC_KEY_PATH}" <<<"${BUILDKITE_INITIAL_JOB_ID}" | base64enc)"
 
 SHOULD_FAIL=false
 for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
