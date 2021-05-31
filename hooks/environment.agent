@@ -75,7 +75,7 @@ function set_cryptic_privileged() {
 #
 #  - If we are the first job to run in this build, we are automatically authorized, as the first job is defined
 #    within the WebUI, so it is assumed secure from drive-by pull requests.
-#  - If we have an environment variable (`BUILDKITE_PLUGIN_CRYPTIC_SIGNED_JOB_ID_BASE64`) and it correctly
+#  - If we have an environment variable (`BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET`) and it correctly
 #    verifies as a signature on the initial job ID, we consider ourselves a launched child pipeline
 
 if [[ "${BUILDKITE_JOB_ID}" == "${BUILDKITE_INITIAL_JOB_ID}" ]]; then
