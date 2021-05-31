@@ -13,7 +13,7 @@ configuration:
       type: array
 
     # Child pipelines that we should propagate credentials to, after verifying treehashes
-    locked_pipelines:
+    signed_pipelines:
       type: array
       properties:
         # The path of the `pipeline.yml` file to upload
@@ -32,4 +32,7 @@ configuration:
         # this pipeline (e.g. for multiple links in a chain of signature verifications)
         signature_file:
           type: string
+    unsigned_pipelines:
+      type: array
+
   additionalProperties: false

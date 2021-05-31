@@ -66,7 +66,7 @@ function calculate_locked_pipeline_treehashes() {
         (shyaml get-values-0 plugins <<<"${STEP}" 2>/dev/null || true) |
         while IFS='' read -r -d '' PLUGIN; do
             # For each plugin, if its `cryptic`, walk over the  the variables
-            (shyaml get-values-0 "staticfloat/cryptic.locked_pipelines" <<<"${PLUGIN}" 2>/dev/null || true) |
+            (shyaml get-values-0 "staticfloat/cryptic.signed_pipelines" <<<"${PLUGIN}" 2>/dev/null || true) |
             while IFS='' read -r -d '' PIPELINE; do
                 # For each locked pipeline, get its pipeline path and its inputs
                 PIPELINE_PATH=$(shyaml get-value "pipeline" <<<"${PIPELINE}" 2>/dev/null || true)
@@ -104,7 +104,7 @@ function extract_pipeline_signatures() {
         (shyaml get-values-0 plugins <<<"${STEP}" 2>/dev/null || true) |
         while IFS='' read -r -d '' PLUGIN; do
             # For each plugin, if its `cryptic`, walk over the  the variables
-            (shyaml get-values-0 "staticfloat/cryptic.locked_pipelines" <<<"${PLUGIN}" 2>/dev/null || true) |
+            (shyaml get-values-0 "staticfloat/cryptic.signed_pipelines" <<<"${PLUGIN}" 2>/dev/null || true) |
             while IFS='' read -r -d '' PIPELINE; do
                 # For each locked pipeline, get its pipeline path and its inputs
                 (shyaml get-value "signature" <<<"${PIPELINE}" 2>/dev/null || true)
