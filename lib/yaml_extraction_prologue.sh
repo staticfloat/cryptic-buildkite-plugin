@@ -88,7 +88,9 @@ function extract_pipeline_treehashes_and_signatures() {
                 local SIGNATURE_FILE_SOURCE=""
                 if shyaml get-value "signature_file" <<<"${PIPELINE}" 2>/dev/null >/dev/null; then
                     SIGNATURE_FILE_SOURCE="$(shyaml get-value "signature_file" <<<"${PIPELINE}" 2>/dev/null)"
-                    BASE64_SIGNATURE="$(base64enc <"${SIGNATURE_FILE_SOURCE}")"
+                    if [[ -f "${SIGNATURE_FILE_SOURCE}" ]]; then
+                        BASE64_SIGNATURE="$(base64enc <"${SIGNATURE_FILE_SOURCE}")"
+                    fi
                 else
                     # Try to extract the signature from the yaml directly too
                     BASE64_SIGNATURE="$(shyaml get-value "signature" <<<"${PIPELINE}" 2>/dev/null || true)"

@@ -10,7 +10,7 @@ source "${CRYPTIC_REPO}/lib/common.sh"
 # This reads in command-line parameters such as PRIVATE_KEY_PATH, REPO_ROOT, etc...
 source "${CRYPTIC_REPO}/lib/encrypt_decrypt_prologue.sh"
 
-# Get the variable name and value
+# Get the file path to encrypt
 if [[ "$#" -ge 3 ]]; then
     FILE_PATH="${3}"
 else
