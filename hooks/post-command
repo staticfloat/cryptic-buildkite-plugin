@@ -26,7 +26,7 @@ if ! is_rsa_public_key "${PUBLIC_KEY_PATH}"; then
 fi
 
 # Collect all the signed and unsigned pipeline configurations we have
-readarray -d '' -t UNSIGNED_PIPELINES < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_UNSIGNED_PIPELINES" "PIPELINE")
+readarray -d '' -t UNSIGNED_PIPELINES < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_UNSIGNED_PIPELINES")
 readarray -d '' -t SIGNED_PIPELINES < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_SIGNED_PIPELINES" "PIPELINE")
 
 # Immediately launch all the unsigned pipelines
