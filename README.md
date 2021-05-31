@@ -7,6 +7,8 @@ This plugin enables the deployment and usage of secrets within buildkite pipelin
 In particular, it prevents untrusted contributors from leaking secrets in sensitive pipelines.
 
 A chain of trust is established starting from the WebUI, as these steps are only editable by repository administrators.
+The WebUI then launches pipelines, using the `cryptic` plugin, which facilitates verification of treehashes before launching pipelines that expect secrets to be available.
+The propagation of the chain of trust after verifying that the repository state has not changed critical files allows unknown contributors to make changes to the majority of the codebase, while retaining a tight leash on critical codepaths that have access to secrets.
 
 ## Setting up new agents and repositories for `cryptic`
 
@@ -26,3 +28,20 @@ Repository setup:
     - Repositories can have the same repository key encrypted with multiple agent keys, to support multiple agent pools each with a different subset of allowed repository secret access.
   2. Encrypt secret files/variables using `bin/encrypt_{file,variable}`, and add the relevant plugin stanzas to your pipeline.
     - To ensure things are working correctly, you can use `bin/decrypt` to test out how things will be decoded.
+  3. To propagate trust to a child pipeline, use the `signed_pipelines` parameter
+    - To ensure a malicious contributor cannot run `echo ${SECRET_KEY}` as part of the privileged build, add all scripts invoked during the build to the `inputs` sub-parameter, then use `bin/sign_treehashes` to get a signature that will be checked before the pipeline is launched.
+    - If you have a complicated chain of trust (A -> B -> C) it can be tedious to regenerate signatures for all links in the chain simply because there was a change made in C.  For this usecase, you can use `signature_file` instead of `signature`, to decouple the signature from the `.yml` file itself, meaning that `B`'s hash doesn't change just because `C`'s did.
+
+## Utilities
+
+This repository has a few utility scripts:
+
+* [`create_agent_keypair`](bin/create_agent_keypair): Generates the `agent.key` and `agent.pub` files.
+
+* [`create_repo_key`](bin/create_repo_key): Using a pre-generated agent keypair, generates the repository key and stores it in `.buildkite/cryptic_repo_keys`.
+
+* [`encrypt_file`](bin/encrypt_file)/[`encrypt_variable](bin/encrypt_variable): Encrypt files/text strings using the repository key.  Files get stored as `.encrypted` files, and variables can be embedded directly within `pipeline.yml` files.
+
+* [`decrypt`](bin/decrypt): Testing tool to ensure that your encrypted values are round-tripping properly.
+
+* [`sign_treehashes`](bin/sign_treehashes): Consume the `
