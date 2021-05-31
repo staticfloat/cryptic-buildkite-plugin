@@ -2,7 +2,7 @@
 
 set -eou pipefail
 
-if [[ -z "${BUILDKITE_COMMAND:-} ]]; then
+if [[ -z "${BUILDKITE_COMMAND:-}" ]]; then
     exit 0
 fi
 
