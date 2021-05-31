@@ -54,8 +54,9 @@ function extract_encrypted_files() {
     done    
 }
 
-# Calculate the treehashes of each locked pipeline defined within a launching `.yml` file
-function calculate_locked_pipeline_treehashes() {
+# Calculate the treehashes of each signed pipeline defined within a launching `.yml` file,
+# also returning the signature if it exists, (blank string if it doesn't)
+function extract_pipeline_treehashes_and_signatures() {
     # Most of our paths are relative to the root directory, so this is just easier
     pushd "${REPO_ROOT}" >/dev/null
 
@@ -68,8 +69,8 @@ function calculate_locked_pipeline_treehashes() {
             # For each plugin, if its `cryptic`, walk over the  the variables
             (shyaml get-values-0 "staticfloat/cryptic.signed_pipelines" <<<"${PLUGIN}" 2>/dev/null || true) |
             while IFS='' read -r -d '' PIPELINE; do
-                # For each locked pipeline, get its pipeline path and its inputs
-                PIPELINE_PATH=$(shyaml get-value "pipeline" <<<"${PIPELINE}" 2>/dev/null || true)
+                # For each signed pipeline, get its pipeline path and its inputs
+                PIPELINE_PATH="$(shyaml get-value "pipeline" <<<"${PIPELINE}" 2>/dev/null || true)"
 
                 # Start by calculating the treehash of the yaml file
                 INPUT_TREEHASHES=( "$(calc_treehash <<<"${PIPELINE_PATH}")" )
@@ -82,32 +83,19 @@ function calculate_locked_pipeline_treehashes() {
                 # Calculate full treehash
                 FULL_TREEHASH="$(printf "%s" "${INPUT_TREEHASHES[@]}" | calc_shasum)"
 
+                # If `signature_file` is defined, use it!
+                local BASE64_SIGNATURE=""
+                local SIGNATURE_FILE_SOURCE=""
+                if shyaml get-value "signature_file" <<<"${PIPELINE}" 2>/dev/null >/dev/null; then
+                    SIGNATURE_FILE_SOURCE="$(shyaml get-value "signature_file" <<<"${PIPELINE}" 2>/dev/null)"
+                    BASE64_SIGNATURE="$(base64enc <"${SIGNATURE_FILE_SOURCE}")"
+                else
+                    # Try to extract the signature from the yaml directly too
+                    BASE64_SIGNATURE="$(shyaml get-value "signature" <<<"${PIPELINE}" 2>/dev/null || true)"
+                fi
+
                 # Print out treehash and pipeline path
-                printf "%s&%s\n" "${PIPELINE_PATH}" "${FULL_TREEHASH}"
-            done
-        done
-    done
-
-    # Don't stay in `${REPO_ROOT}`
-    popd >/dev/null
-}
-
-# Calculate the treehashes of each locked pipeline defined within a launching `.yml` file
-function extract_pipeline_signatures() {
-    # Most of our paths are relative to the root directory, so this is just easier
-    pushd "${REPO_ROOT}" >/dev/null
-
-    # Iterate over the steps in the yaml file
-    (shyaml get-values-0 steps <"${1}" || true) |
-    while IFS='' read -r -d '' STEP; do
-        # For each step, get its list of plugins
-        (shyaml get-values-0 plugins <<<"${STEP}" 2>/dev/null || true) |
-        while IFS='' read -r -d '' PLUGIN; do
-            # For each plugin, if its `cryptic`, walk over the  the variables
-            (shyaml get-values-0 "staticfloat/cryptic.signed_pipelines" <<<"${PLUGIN}" 2>/dev/null || true) |
-            while IFS='' read -r -d '' PIPELINE; do
-                # For each locked pipeline, get its pipeline path and its inputs
-                (shyaml get-value "signature" <<<"${PIPELINE}" 2>/dev/null || true)
+                printf "%s&%s&%s&%s\n" "${PIPELINE_PATH}" "${FULL_TREEHASH}" "${BASE64_SIGNATURE}" "${SIGNATURE_FILE_SOURCE}"
             done
         done
     done

@@ -14,24 +14,37 @@ source "${CRYPTIC_REPO}/lib/yaml_extraction_prologue.sh"
 
 
 # Extract treehash glob patterns from the YAML
-readarray -t PIPELINE_TREEHASH_PAIRS < <(calculate_locked_pipeline_treehashes "${YAML_PATH}")
+readarray -t PIPELINE_TREEHASH_SIGNATURE_TRIPLETS < <(extract_pipeline_treehashes_and_signatures "${YAML_PATH}")
 
-# Start printing out the helpful debugging messages
+# Output helpful messages to the user
 cat <<-EOD
-    Parsed out ${#PIPELINE_TREEHASH_PAIRS[@]} pipelines being launched.
+    Parsed out ${#PIPELINE_TREEHASH_SIGNATURE_TRIPLETS[@]} pipelines being launched.
     Printing out exemplar plugin stanzas:
 
 EOD
 
 # Decrypt encrypted variables
-for PAIR in "${PIPELINE_TREEHASH_PAIRS[@]}"; do
-    PIPELINE_PATH="$(echo ${PAIR%%&*} | tr -d '"')"
-    PIPELINE_TREEHASH="$(echo ${PAIR#*&} | tr -d '"')"
+for TRIPLET in "${PIPELINE_TREEHASH_SIGNATURE_TRIPLETS[@]}"; do
+    PIPELINE_PATH="$(cut -d'&' -f1 <<<"${TRIPLET}" | tr -d '"')"
+    PIPELINE_TREEHASH="$(cut -d'&' -f2 <<<"${TRIPLET}" | tr -d '"')"
+    # We don't extract any pre-existing PIPELINE_SIGNATURE values
+    PIPELINE_SIGNATURE_FILESOURCE="$(cut -d'&' -f4 <<<"${TRIPLET}" | tr -d '"')"
+
     PIPELINE_SIGNATURE="$(sign_rsa "${PRIVATE_KEY_PATH}" <<<"${PIPELINE_TREEHASH}" | base64enc)"
-    cat <<-EOD
+    if [[ -f "${PIPELINE_SIGNATURE_FILESOURCE}" ]]; then
+        base64dec <<<"${PIPELINE_SIGNATURE}" >"${PIPELINE_SIGNATURE_FILESOURCE}"
+        cat <<-EOD
+            - pipeline: ${PIPELINE_PATH}
+              signature_file: ${PIPELINE_SIGNATURE_FILESOURCE}
+              ...
+
+EOD
+    else
+        cat <<-EOD
             - pipeline: ${PIPELINE_PATH}
               signature: ${PIPELINE_SIGNATURE}
               ...
 
 EOD
+    fi
 done

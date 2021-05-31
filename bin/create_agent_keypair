@@ -8,19 +8,19 @@ CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null 
 source "${CRYPTIC_REPO}/lib/common.sh"
 
 if [[ "$#" -ge "1" ]]; then
-    KEYFILE="${1}"
+    KEY_PREFIX="${1}"
 else
-    read -p 'Keyfile location (no extension): ' KEYFILE
+    read -p 'Keyfile location (no extension): ' KEY_PREFIX
 fi
 
-echo "Generating private key at ${KEYFILE}.key..."
-openssl genrsa -out ${KEYFILE}.key
-echo "Generating public key at ${KEYFILE}.pub..."
-openssl rsa -in ${KEYFILE}.key -pubout -out ${KEYFILE}.pub
+echo "Generating private key at ${KEY_PREFIX}.key..."
+openssl genrsa -out ${KEY_PREFIX}.key
+echo "Generating public key at ${KEY_PREFIX}.pub..."
+openssl rsa -in ${KEY_PREFIX}.key -pubout -out ${KEY_PREFIX}.pub
 
 cat <<-EOF
 
-    Congratulations, you now have an agent keypair stored at ${KEYFILE}.{key,pub}!
+    Congratulations, you now have an agent keypair stored at ${KEY_PREFIX}.{key,pub}!
     These keyfiles must be deployed onto your agents, and the public keyfile will be
     used to generate a repository key and encrypt secrets, so keep it handy.
 
