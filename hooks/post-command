@@ -21,7 +21,7 @@ fi
 # Extract the public key
 PUBLIC_KEY_PATH=$(mktemp)
 base64dec <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PUBLIC_KEY_SECRET}" >"${PUBLIC_KEY_PATH}"
-if ! is_rsa_private_key "${PRIVATE_KEY_PATH}"; then
+if ! is_rsa_public_key "${PUBLIC_KEY_PATH}"; then
     die "Invalid RSA private key passed from agent environment hook!"
 fi
 
