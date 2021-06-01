@@ -60,5 +60,5 @@ for FILE_PATH in "${ENCRYPTED_FILES[@]}"; do
         SKIPPED_MSG=", skipped"
     fi
 
-    echo "      -> ${FILE_PATH} ($(filesize "${REPO_ROOT}/${FILE_PATH}") bytes${SKIPPED_MSG})"
+    echo "      -> ${FILE_PATH} ($(filesize "${REPO_ROOT}/${FILE_PATH}")kb${SKIPPED_MSG})"
 done

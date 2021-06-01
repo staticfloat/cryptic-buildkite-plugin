@@ -215,9 +215,9 @@ function calc_treehash() {
 ##############                random utilities                  ##############
 ##############################################################################
 
-# Print file size, in bytes
+# Print file size, in kilobytes
 function filesize() {
-    du -b "${1}" | cut -f1
+    du -k "${1}" | cut -f1
 }
 
 function collect_buildkite_array() {
