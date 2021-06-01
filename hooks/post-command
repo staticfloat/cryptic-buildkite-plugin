@@ -64,7 +64,7 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
         SIGNATURE_FILE=$(mktemp)
         base64dec <<<"${!SIGNATURE_VAR}" >"${SIGNATURE_FILE}"
     fi
-    if [[ "$(decrypt_aes "${UNENCRYPTED_REPO_KEY}" <"${SIGNATURE_FILE}")" != "${FULL_TREEHASH}" ]]; then
+    if [[ "$(decrypt_aes "${UNENCRYPTED_REPO_KEY_PATH}" <"${SIGNATURE_FILE}")" != "${FULL_TREEHASH}" ]]; then
         # Execute `die` in a subshell so that we can print out failure messages for each pipeline,
         # then fail out once at the end, ignoring the `exit` and failure that it creates.
         (die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash signature check!  You may need to re-run cryptic/bin/sign_treehashes!"; ) || true
