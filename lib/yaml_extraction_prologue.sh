@@ -56,7 +56,7 @@ function extract_encrypted_files() {
 
 # Calculate the treehashes of each signed pipeline defined within a launching `.yml` file,
 # also returning the signature if it exists, (blank string if it doesn't)
-function extract_pipeline_treehashes_and_signatures() {
+function extract_pipeline_treehashes() {
     # Most of our paths are relative to the root directory, so this is just easier
     pushd "${REPO_ROOT}" >/dev/null
 
@@ -84,20 +84,20 @@ function extract_pipeline_treehashes_and_signatures() {
                 FULL_TREEHASH="$(printf "%s" "${INPUT_TREEHASHES[@]}" | calc_shasum)"
 
                 # If `signature_file` is defined, use it!
-                local BASE64_SIGNATURE=""
-                local SIGNATURE_FILE_SOURCE=""
+                local BASE64_ENCRYPTED_TREEHASH=""
+                local TREEHASH_FILE_SOURCE=""
                 if shyaml get-value "signature_file" <<<"${PIPELINE}" 2>/dev/null >/dev/null; then
-                    SIGNATURE_FILE_SOURCE="$(shyaml get-value "signature_file" <<<"${PIPELINE}" 2>/dev/null)"
-                    if [[ -f "${SIGNATURE_FILE_SOURCE}" ]]; then
-                        BASE64_SIGNATURE="$(base64enc <"${SIGNATURE_FILE_SOURCE}")"
+                    TREEHASH_FILE_SOURCE="$(shyaml get-value "signature_file" <<<"${PIPELINE}" 2>/dev/null)"
+                    if [[ -f "${TREEHASH_FILE_SOURCE}" ]]; then
+                        BASE64_ENCRYPTED_TREEHASH="$(base64enc <"${TREEHASH_FILE_SOURCE}")"
                     fi
                 else
                     # Try to extract the signature from the yaml directly too
-                    BASE64_SIGNATURE="$(shyaml get-value "signature" <<<"${PIPELINE}" 2>/dev/null || true)"
+                    BASE64_ENCRYPTED_TREEHASH="$(shyaml get-value "signature" <<<"${PIPELINE}" 2>/dev/null || true)"
                 fi
 
                 # Print out treehash and pipeline path
-                printf "%s&%s&%s&%s\n" "${PIPELINE_PATH}" "${FULL_TREEHASH}" "${BASE64_SIGNATURE}" "${SIGNATURE_FILE_SOURCE}"
+                printf "%s&%s&%s&%s\n" "${PIPELINE_PATH}" "${FULL_TREEHASH}" "${BASE64_ENCRYPTED_TREEHASH}" "${TREEHASH_FILE_SOURCE}"
             done
         done
     done

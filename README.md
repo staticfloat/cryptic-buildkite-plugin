@@ -29,7 +29,7 @@ Repository setup:
   2. Encrypt secret files/variables using `bin/encrypt_{file,variable}`, and add the relevant plugin stanzas to your pipeline.
     - To ensure things are working correctly, you can use `bin/decrypt` to test out how things will be decoded.
   3. To propagate trust to a child pipeline, use the `signed_pipelines` parameter
-    - To ensure a malicious contributor cannot run `echo ${SECRET_KEY}` as part of the privileged build, add all scripts invoked during the build to the `inputs` sub-parameter, then use `bin/sign_treehashes` to get a signature that will be checked before the pipeline is launched.
+    - To ensure a malicious contributor cannot run `echo ${SECRET_KEY}` as part of the privileged build, add all scripts invoked during the build to the `inputs` sub-parameter, then use `bin/sign_treehashes` to get an encrypted treehash that will be checked before the pipeline is launched.
     - If you have a complicated chain of trust (A -> B -> C) it can be tedious to regenerate signatures for all links in the chain simply because there was a change made in C.  For this usecase, you can use `signature_file` instead of `signature`, to decouple the signature from the `.yml` file itself, meaning that `B`'s hash doesn't change just because `C`'s did.
 
 ## Utilities
@@ -44,6 +44,6 @@ This repository has a few utility scripts.  Note that most of them are most conv
 
 * [`decrypt`](bin/decrypt): Testing tool to ensure that your encrypted values are round-tripping properly.  Decrypts files within the repository (e.g. decrypting `foo.encrypted` -> `foo`) and prints out environment variables.
 
-* [`sign_treehashes`](bin/sign_treehashes): Consume a `pipeline.yml` file, determine the inputs to the treehashes on-disk, and output signed treehashes.
+* [`sign_treehashes`](bin/sign_treehashes): Consume a `pipeline.yml` file, determine the inputs to the treehashes on-disk, and output encrypted treehashes.
 
 * [`verify_treehashes`](bin/verify_treehashes): Testing tool to verify that the signatures within the given `pipeline.yml` file match the treehash as calculated on-disk.

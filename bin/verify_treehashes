@@ -18,33 +18,31 @@ PUBLIC_KEY_PATH=$(mktemp)
 openssl rsa -in "${PRIVATE_KEY_PATH}" -pubout -out "${PUBLIC_KEY_PATH}" 2>/dev/null
 
 # Extract treehash glob patterns from the YAML
-readarray -t PIPELINE_TREEHASH_SIGNATURE_TRIPLETS < <(extract_pipeline_treehashes_and_signatures "${YAML_PATH}")
+readarray -t PIPELINE_TREEHASH_TRIPLETS < <(extract_pipeline_treehashes "${YAML_PATH}")
 
 # Start printing out the helpful debugging messages
 cat <<-EOD
-    Parsed out ${#PIPELINE_TREEHASH_SIGNATURE_TRIPLETS[@]} pipelines being launched.
+    Parsed out ${#PIPELINE_TREEHASH_TRIPLETS[@]} pipelines being launched.
     Verifying signatures...
 
 EOD
 
 # Decrypt encrypted variables
 SHOULD_FAIL="false"
-for TRIPLET in "${PIPELINE_TREEHASH_SIGNATURE_TRIPLETS[@]}"; do
+for TRIPLET in "${PIPELINE_TREEHASH_TRIPLETS[@]}"; do
     PIPELINE_PATH="$(cut -d'&' -f1 <<<"${TRIPLET}" | tr -d '"')"
     PIPELINE_TREEHASH="$(cut -d'&' -f2 <<<"${TRIPLET}" | tr -d '"')"
-    PIPELINE_SIGNATURE="$(cut -d'&' -f3 <<<"${TRIPLET}" | tr -d '"')"
-    PIPELINE_SIGNATURE_FILESOURCE="$(cut -d'&' -f4 <<<"${TRIPLET}" | tr -d '"')"
+    PIPELINE_ENCRYPTED_TREEHASH="$(cut -d'&' -f3 <<<"${TRIPLET}" | tr -d '"')"
+    PIPELINE_TREEHASH_FILESOURCE="$(cut -d'&' -f4 <<<"${TRIPLET}" | tr -d '"')"
 
-    # Write embedded signature out to file
-    SIGNATURE_FILE=$(mktemp)
-    base64dec <<<"${PIPELINE_SIGNATURE}" >"${SIGNATURE_FILE}"
-    if echo "${PIPELINE_TREEHASH}" | check_rsa_signature "${PUBLIC_KEY_PATH}" "${SIGNATURE_FILE}"; then
+    # Write embedded encrypted treehash out to file
+    PIPELINE_DECRYPTED_TREEHASH="$(base64dec <<<"${PIPELINE_ENCRYPTED_TREEHASH}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
+    if [[ "${PIPELINE_DECRYPTED_TREEHASH}" == "${PIPELINE_TREEHASH}" ]]; then
         echo "        ${PIPELINE_PATH}: ✔️"
     else
         echo "        ${PIPELINE_PATH}: ❌"
         SHOULD_FAIL="true"
     fi
-    rm -f "${SIGNATURE_FILE}"
 done
 
 # Clean up some temporary files
