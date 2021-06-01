@@ -12,59 +12,46 @@ if [[ "${BUILDKITE_PLUGIN_CRYPTIC_PRIVILEGED:-false}" != "true" ]]; then
     exit 0
 fi
 
-# If we think we are authorized, let's check to make sure that our secret keys are actually valid
-PRIVATE_KEY_PATH=$(mktemp)
-base64dec <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PRIVATE_KEY_SECRET}" >"${PRIVATE_KEY_PATH}"
-if ! is_rsa_private_key "${PRIVATE_KEY_PATH}"; then
-    die "Invalid RSA private key passed from agent environment hook!"
-fi
-
-PUBLIC_KEY_PATH=$(mktemp)
-base64dec <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PUBLIC_KEY_SECRET}" >"${PUBLIC_KEY_PATH}"
-if ! is_rsa_public_key "${PUBLIC_KEY_PATH}"; then
-    die "Invalid RSA public key passed from agent environment hook!"
-fi
-
-# Search for repository key based off of the private key fingerprint
-RSA_FINGERPRINT=$(rsa_fingerprint "${PRIVATE_KEY_PATH}")
-REPO_KEY_PATH=".buildkite/cryptic_repo_keys/repo_key.${RSA_FINGERPRINT:0:8}"
-if [[ ! -f "${REPO_KEY_PATH}" ]]; then
-    die "Cannot find expected repo key at '${REPO_KEY_PATH}'!  Ensure you have added the repository key to ${BUILDKITE_REPO}"
-fi
-UNENCRYPTED_REPO_KEY_PATH=$(mktemp)
-decrypt_rsa "${PRIVATE_KEY_PATH}" < "${REPO_KEY_PATH}" > "${UNENCRYPTED_REPO_KEY_PATH}"
-
+# Receive keys from agent environment hook
+receive_keys
 
 # Collect lists of files and variables we need to decrypt
 readarray -d '' -t ENCRYPTED_VARIABLES < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_VARIABLES")
 readarray -d '' -t ENCRYPTED_FILES < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_FILES")
 
 # Decrypt each file
-echo "--- :unlock: Decrypt files"
-for FILE_PATH in "${ENCRYPTED_FILES[@]}"; do
-    ENC_FILE_PATH="${FILE_PATH}.encrypted"
-    if [[ ! -f "${ENC_FILE_PATH}" ]]; then
-        die "Unable to find file '${ENC_FILE_PATH}' which we have been asked to decrypt!"
-    fi
-    if [[ -f "${FILE_PATH}" ]]; then
-        die "Decrypted file '${FILE_PATH}' already exists in repository?!"
-    fi
+if [[ "${#ENCRYPTED_FILES[@]}" -gt 0 ]]; then
+    echo "--- :unlock: Decrypt files"
+    for FILE_PATH in "${ENCRYPTED_FILES[@]}"; do
+        ENC_FILE_PATH="${FILE_PATH}.encrypted"
+        if [[ ! -f "${ENC_FILE_PATH}" ]]; then
+            die "Unable to find file '${ENC_FILE_PATH}' which we have been asked to decrypt!"
+        fi
+        if [[ -f "${FILE_PATH}" ]]; then
+            die "Decrypted file '${FILE_PATH}' already exists in repository?!"
+        fi
 
-    echo " -> Decrypting ${FILE_PATH}"
-    decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <"${ENC_FILE_PATH}" >"${FILE_PATH}"
-done
+        echo " -> Decrypting ${FILE_PATH}"
+        decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <"${ENC_FILE_PATH}" >"${FILE_PATH}"
+    done
+fi
 
 # Decrypt each secret environment variable
-echo "--- :unlock: Decrypt environment variables"
-for PAIR in "${ENCRYPTED_VARIABLES[@]}"; do
-    VARNAME="$(echo ${PAIR%%=*} | tr -d '"')"
-    SECRET_VALUE_BASE64="$(echo ${PAIR#*=} | tr -d '"')"
+if [[ "${#ENCRYPTED_VARIABLES[@]}" -gt 0 ]]; then
+    echo "--- :unlock: Decrypt environment variables"
+    for PAIR in "${ENCRYPTED_VARIABLES[@]}"; do
+        VARNAME="$(echo ${PAIR%%=*} | tr -d '"')"
+        SECRET_VALUE_BASE64="$(echo ${PAIR#*=} | tr -d '"')"
 
-    echo " -> Decrypting ${VARNAME}"
-    VALUE="$(base64dec <<<"${SECRET_VALUE_BASE64}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
-    
-    export "${VARNAME}"="${VALUE}"
-done
+        echo " -> Decrypting ${VARNAME}"
+        VALUE="$(base64dec <<<"${SECRET_VALUE_BASE64}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
+
+        export "${VARNAME}"="${VALUE}"
+    done
+fi
 
 # Sign the initial buildkite job ID, for future launch needs
 export BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET=$(echo "${BUILDKITE_INITIAL_JOB_ID}" | sign_rsa "${PRIVATE_KEY_PATH}" | base64enc)
+
+# Clean up the values we're not using anymore
+cleanup_keys

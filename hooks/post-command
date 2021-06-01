@@ -18,6 +18,9 @@ if [[ "$BUILDKITE_COMMAND_EXIT_STATUS" != "0" ]]; then
     exit 0
 fi
 
+# Receive keys from agent environment hook
+receive_keys
+
 # Collect all the signed and unsigned pipeline configurations we have
 readarray -d '' -t UNSIGNED_PIPELINES < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_UNSIGNED_PIPELINES")
 readarray -d '' -t SIGNED_PIPELINES < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_SIGNED_PIPELINES" "PIPELINE")
@@ -75,9 +78,7 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
 done
 
 # Clean up the values we're not using anymore
-shred -u "${PRIVATE_KEY_PATH}" "${UNENCRYPTED_REPO_KEY_PATH}"
-unset BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET
-unset PUBLIC_KEY_PATH PRIVATE_KEY_PATH UNENCRYPTED_REPO_KEY_PATH
+cleanup_keys
 
 # This is used to allow us to fail at the end, after trying all pipelines
 if [[ "${SHOULD_FAIL}" != "false" ]]; then

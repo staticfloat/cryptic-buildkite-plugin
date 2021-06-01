@@ -236,3 +236,32 @@ function collect_buildkite_array() {
         IDX=$((${IDX} + 1))
     done
 }
+
+function receive_keys() {
+    # If we think we are authorized, let's check to make sure that our secret keys are actually valid
+    PRIVATE_KEY_PATH=$(mktemp)
+    base64dec <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PRIVATE_KEY_SECRET}" >"${PRIVATE_KEY_PATH}"
+    if ! is_rsa_private_key "${PRIVATE_KEY_PATH}"; then
+        die "Invalid RSA private key passed from agent environment hook!"
+    fi
+
+    PUBLIC_KEY_PATH=$(mktemp)
+    base64dec <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PUBLIC_KEY_SECRET}" >"${PUBLIC_KEY_PATH}"
+    if ! is_rsa_public_key "${PUBLIC_KEY_PATH}"; then
+        die "Invalid RSA public key passed from agent environment hook!"
+    fi
+
+    # Search for repository key based off of the private key fingerprint
+    RSA_FINGERPRINT=$(rsa_fingerprint "${PRIVATE_KEY_PATH}")
+    REPO_KEY_PATH=".buildkite/cryptic_repo_keys/repo_key.${RSA_FINGERPRINT:0:8}"
+    if [[ ! -f "${REPO_KEY_PATH}" ]]; then
+        die "Cannot find expected repo key at '${REPO_KEY_PATH}'!  Ensure you have added the repository key to ${BUILDKITE_REPO}"
+    fi
+    UNENCRYPTED_REPO_KEY_PATH=$(mktemp)
+    decrypt_rsa "${PRIVATE_KEY_PATH}" < "${REPO_KEY_PATH}" > "${UNENCRYPTED_REPO_KEY_PATH}"
+}
+
+function cleanup_keys() {
+    shred -u "${PRIVATE_KEY_PATH}" "${PUBLIC_KEY_PATH}" "${UNENCRYPTED_REPO_KEY_PATH}"
+    unset PRIVATE_KEY_PATH PUBLIC_KEY_PATH UNENCRYPTED_REPO_KEY_PATH RSA_FINGERPRINT
+}
