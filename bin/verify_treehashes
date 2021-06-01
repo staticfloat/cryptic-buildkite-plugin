@@ -28,6 +28,7 @@ cat <<-EOD
 EOD
 
 # Decrypt encrypted variables
+SHOULD_FAIL="false"
 for TRIPLET in "${PIPELINE_TREEHASH_SIGNATURE_TRIPLETS[@]}"; do
     PIPELINE_PATH="$(cut -d'&' -f1 <<<"${TRIPLET}" | tr -d '"')"
     PIPELINE_TREEHASH="$(cut -d'&' -f2 <<<"${TRIPLET}" | tr -d '"')"
@@ -41,9 +42,14 @@ for TRIPLET in "${PIPELINE_TREEHASH_SIGNATURE_TRIPLETS[@]}"; do
         echo "        ${PIPELINE_PATH}: ✔️"
     else
         echo "        ${PIPELINE_PATH}: ❌"
+        SHOULD_FAIL="true"
     fi
     rm -f "${SIGNATURE_FILE}"
 done
 
 # Clean up some temporary files
 rm -f "${PUBLIC_KEY_PATH}"
+
+if [[ ${SHOULD_FAIL} != "false" ]]; then
+    exit 1
+fi
