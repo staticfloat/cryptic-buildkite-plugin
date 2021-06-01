@@ -1,0 +1,26 @@
+## pipeline that showcases decryption of files, running commands, and triggering a chained signed pipeline
+
+steps:
+  - label: ":lock: codesign"
+    key: "codesign"
+    # We only run codesigning after the build is done
+    depends_on:
+      - "build"
+    plugins:
+      - staticfloat/cryptic:
+          files:
+            - ".buildkite/secrets/codesign_key.txt"
+          signed_pipelines:
+            - pipeline: .buildkite/deploy.yml
+              # Use `signature_file` here so that if the signature changes, we don't have to change our
+              # own pipeline.yml file, which would then necessitate changing the WebUI's hash.
+              signature_file: .buildkite/deploy.yml.signature
+              inputs:
+                - "src/**/*.jl"
+    commands: |
+      echo "unlocked codesign_key.txt:"
+      cat .buildkite/secrets/codesign_key.txt
+
+# We must accept the signed job id secret in order to propagate secrets
+env:
+  BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET: ${BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET?}

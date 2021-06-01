@@ -1,0 +1,21 @@
+# NOTE: This `pipeline.yml` file would be saved in the WebUI
+steps:
+  # In the WebUI, the `cryptic` launch job _must_ be the first job to run
+  - label: ":rocket: launch pipelines"
+    plugins:
+      - staticfloat/cryptic:
+          # Our list of pipelines that should be launched (but don't require a signature)
+          # These pipelines can be modified by any contributor and CI will still run.
+          # Build secrets will not be available in these pipelines (or their children)
+          unsigned_pipelines:
+            - .buildkite/build.yml
+
+          # Our signed pipelines must have a `signature` or `signature_file` parameter that
+          # verifies treehash of the pipeline itself and the inputs listed in `inputs`
+          signed_pipelines:
+            - pipeline: .buildkite/codesign.yml
+              # Use `signature_file` here so that if the signature changes, we don't have to change the
+              # configuration of the WebUI's hashes.  Levels of indirection FTW.
+              signature_file: .buildkite/codesign.yml.signature
+              inputs:
+                - "src/**/*.jl"

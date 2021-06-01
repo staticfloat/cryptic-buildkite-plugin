@@ -1,0 +1,5 @@
+steps:
+  - label: ":hammer: build"
+    key: "build"
+    commands: |
+      echo "let's pretend we built something here!"
