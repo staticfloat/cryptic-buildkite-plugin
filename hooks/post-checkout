@@ -68,12 +68,3 @@ done
 
 # Sign the initial buildkite job ID, for future launch needs
 export BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET=$(echo "${BUILDKITE_INITIAL_JOB_ID}" | sign_rsa "${PRIVATE_KEY_PATH}" | base64enc)
-
-# Clean up public/private key paths
-shred -u "${PRIVATE_KEY_PATH}" "${UNENCRYPTED_REPO_KEY_PATH}"
-
-# Even though we consider the current pipeline as "privileged", we're going to wipe out the following variables,
-# so as to minimize the chance of an accidental `set` leaking things that noone should see.
-unset BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PRIVATE_KEY_SECRET
-unset UNENCRYPTED_REPO_KEY_PATH
-unset PRIVATE_KEY_PATH
