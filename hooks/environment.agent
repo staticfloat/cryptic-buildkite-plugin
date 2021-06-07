@@ -2,7 +2,7 @@
 
 set -eou pipefail
 
-## A foundational concept for the useage of this hook is that we can deny access to secrets
+## A foundational concept for the usage of this hook is that we can deny access to secrets
 ## (such as the agent private key or the build token file) by deleting or unmounting the
 ## `/secrets` folder.  This agent should always be running within some kind of sandbox,
 ## whether that be a Docker container or whatever.  When the job is finished, the buildkite
@@ -14,7 +14,7 @@ SECRETS_MOUNT_POINT="/secrets"
 ## The secrets that must be contained within:
 ##    - `agent.{key,pub}`: An RSA private/public keypair (typically generated via the
 ##       script `bin/create_agent_keypair`).  See the top-level `README.md` for more.
-##    - `buildkite.token`: A buildkite API token (with `read_builds` permission).
+##    - `buildkite-api-token`: A buildkite API token (with `read_builds` permission).
 
 # Helper function
 function die() {
@@ -42,7 +42,7 @@ else
 fi
 
 # Create a buildkite token with `read_builds` permissions, paste it in here.
-BUILDKITE_TOKEN_PATH="${SECRETS_MOUNT_POINT}/buildkite.token"
+BUILDKITE_TOKEN_PATH="${SECRETS_MOUNT_POINT}/buildkite-api-token"
 if [[ ! -f "${BUILDKITE_TOKEN_PATH}" ]]; then
     die "Unable to open buildkite token path '${BUILDKITE_TOKEN_PATH}'!  Make sure your agent has this file deployed within it! "
 fi
