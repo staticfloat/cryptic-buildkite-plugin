@@ -26,11 +26,19 @@ function extract_encrypted_variables() {
     while IFS='' read -r -d '' STEP; do
         # For each step, get its list of plugins
         (shyaml get-values-0 plugins <<<"${STEP}" 2>/dev/null || true) |
-        while IFS='' read -r -d '' PLUGIN; do
-            # For each plugin, if its `cryptic`, extract the variables
-            (shyaml get-values-0 "staticfloat/cryptic.variables" <<<"${PLUGIN}" 2>/dev/null || true) |
-            while IFS='' read -r -d '' VAR; do
-                printf "%s\n" "${VAR}"
+        while IFS='' read -r -d '' PLUGINS; do
+            # Get the plugin names
+            (shyaml keys-0 <<<"${PLUGINS}" || true) |
+            while IFS='' read -r -d '' PLUGIN_NAME; do
+                # Skip plugins that are not named `cryptic`
+                if [[ "${PLUGIN_NAME}" != staticfloat/cryptic* ]]; then
+                    continue
+                fi
+                # For each plugin, if its `cryptic`, extract the variables
+                (shyaml get-values-0 "${PLUGIN_NAME}.variables" <<<"${PLUGINS}" 2>/dev/null || true) |
+                while IFS='' read -r -d '' VAR; do
+                    printf "%s\n" "${VAR}"
+                done
             done
         done
     done    
@@ -43,12 +51,20 @@ function extract_encrypted_files() {
     while IFS='' read -r -d '' STEP; do
         # For each step, get its list of plugins
         (shyaml get-values-0 plugins <<<"${STEP}" 2>/dev/null || true) |
-        while IFS='' read -r -d '' PLUGIN; do
-            # For each plugin, if its `cryptic`, extract the files
-            (shyaml get-values-0 "staticfloat/cryptic.files" <<<"${PLUGIN}" 2>/dev/null || true) |
-            while IFS='' read -r -d '' FILE; do
-                FILE="$(echo ${FILE} | tr -d '"')"
-                printf "%s\n" "${FILE}"
+        while IFS='' read -r -d '' PLUGINS; do
+            # Get the plugin names
+            (shyaml keys-0 <<<"${PLUGINS}" || true) |
+            while IFS='' read -r -d '' PLUGIN_NAME; do
+                # Skip plugins that are not named `cryptic`
+                if [[ "${PLUGIN_NAME}" != staticfloat/cryptic* ]]; then
+                    continue
+                fi
+                # For each plugin, if its `cryptic`, extract the files
+                (shyaml get-values-0 "${PLUGIN_NAME}.files" <<<"${PLUGINS}" 2>/dev/null || true) |
+                while IFS='' read -r -d '' FILE; do
+                    FILE="$(echo ${FILE} | tr -d '"')"
+                    printf "%s\n" "${FILE}"
+                done
             done
         done
     done    
