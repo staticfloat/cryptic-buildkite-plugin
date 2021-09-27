@@ -27,7 +27,8 @@ readarray -d '' -t SIGNED_PIPELINES < <(collect_buildkite_array "BUILDKITE_PLUGI
 
 # Immediately launch all the unsigned pipelines
 for PIPELINE_PATH in "${UNSIGNED_PIPELINES[@]}"; do
-    buildkite-agent pipeline upload "${PIPELINE_PATH}"
+    # Explicitly _do not_ provide the signed job id for unsigned pipelines
+    BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET= buildkite-agent pipeline upload "${PIPELINE_PATH}"
 done
 
 SHOULD_FAIL=false
