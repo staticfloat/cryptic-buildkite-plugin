@@ -35,12 +35,12 @@ decrypt_aes_key_then_encrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <"${REPO_R
 cat <<-EOD
     Congratulations, you have successfully encrypted a secret.
 
-    The file has been encrypted into a `.encrypted` file; if you had previously checked
+    The file has been encrypted into a '.encrypted' file; if you had previously checked
 	the unencrypted file into your git repository, you must delete its history to truly
-	eliminate it; I suggest using a tool such as the excellent `git-filter-repo` tool
+	eliminate it; I suggest using a tool such as the excellent 'git-filter-repo' tool
 	to do this: https://github.com/newren/git-filter-repo
 
-	You should furthermore add this file to a `.gitignore`, so that the unencrypted file
+	You should furthermore add this file to a '.gitignore', so that the unencrypted file
 	does not cause the git repository to appear dirty (and to prevent accidental check-
 	ins in the future).
 
