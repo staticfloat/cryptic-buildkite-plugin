@@ -95,8 +95,8 @@ function set_cryptic_privileged() {
         base64dec <<<"${ADHOC_PAIR[0]}" | openssl rsautl -decrypt -inkey "${PRIVATE_KEY_PATH}" > "${TEMP_KEYFILE}"
 
         # Make sure the AES key is the right length
-        if [[ wc -c "${TEMP_KEYFILE}" != 128 ]]; then
-            die "Invalid AES key embedded in ad-hoc secret '${EXPORTED_NAME}'!"
+        if [[ $(wc -c <"${TEMP_KEYFILE}") != "128" ]]; then
+            die "Invalid AES key embedded in ad-hoc secret '${EXPORTED_NAME}', counted '$(wc -c <"${TEMP_KEYFILE}")' bytes instead of 128!"
         fi
 
         export "${EXPORTED_NAME}"="$(base64dec <<<"${ADHOC_PAIR[1]}" | openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass "file:${TEMP_KEYFILE}")"
