@@ -32,6 +32,12 @@ configuration:
         # this pipeline (e.g. for multiple links in a chain of signature verifications)
         signature_file:
           type: string
+
+        # If a signature failure should be overridable in the WebUI via a `block` step,
+        # set this to `true`.  This is most useful for when a committer is experimenting
+        # with a new setup and doesn't want to update the treehash every time.
+        allow_hash_override:
+          type: boolean
     unsigned_pipelines:
       type: array
 
