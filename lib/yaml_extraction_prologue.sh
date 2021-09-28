@@ -82,7 +82,7 @@ function extract_pipeline_treehashes() {
         # For each step, get its list of plugins
         (shyaml get-values-0 plugins <<<"${STEP}" 2>/dev/null || true) |
         while IFS='' read -r -d '' PLUGIN; do
-            # For each plugin, if its `cryptic`, walk over the  the variables
+            # For each plugin, if its `cryptic`, walk over the signed pipeliness
             (shyaml get-values-0 "staticfloat/cryptic.signed_pipelines" <<<"${PLUGIN}" 2>/dev/null || true) |
             while IFS='' read -r -d '' PIPELINE; do
                 # For each signed pipeline, get its pipeline path and its inputs
