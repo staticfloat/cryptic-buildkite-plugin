@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+## Encrypt a variable for embedding directly within a `pipeline.yml` file, and to be unlocked
+## during the `environment` hook.  Note that this is intended only for SSH key decryption,
+## and all secrets that can be embedded within the repository should be.
+
+# Load common tools
+CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/common.sh"
+
+# Get the RSA public keyfile path, so that we can create and encrypt a key/secret pair
+find_public_key "${1:-}"
+
+# Get the variable name and value
+if [[ "$#" -ge 2 ]]; then
+    SECRET_NAME="${2}"
+else
+    read -p 'Variable name: ' SECRET_NAME
+fi
+
+# Read in secret value
+if [ "$#" -ge 3 ]; then
+    SECRET_VALUE="${3}"
+else
+    read -sp 'Secret value: ' SECRET_VALUE
+    echo "${SECRET_VALUE}" | sed 's/./*/g'
+fi
+
+
+ENCRYPTED_SECRET_VALUE="$(encrypt_adhoc "${PUBLIC_KEY_PATH}" "${SECRET_VALUE}")"
+
+cat <<-EOD
+
+    Congratulations, you have successfully encrypted an ad-hoc secret variable.
+
+    This value should ONLY be used for things like ssh keys that must be available before
+    any code has even been cloned to the worker machine.  By default, you should use the
+    tools 'encrypt_file' or 'encrypt_variable' to get a more compartmentalized security
+    barrier around your secrets.
+
+    You should add the following environment variable stanza to the pipelines you want to
+    have access to this secret.
+
+    env:
+      - CRYPTIC_ADHOC_SECRET_${SECRET_NAME}="${ENCRYPTED_SECRET_VALUE}"
+EOD

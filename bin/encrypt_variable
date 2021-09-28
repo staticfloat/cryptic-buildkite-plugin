@@ -7,7 +7,14 @@ CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null 
 source "${CRYPTIC_REPO}/lib/common.sh"
 
 # This reads in command-line parameters such as PRIVATE_KEY_PATH, REPO_ROOT, etc...
-source "${CRYPTIC_REPO}/lib/encrypt_decrypt_prologue.sh"
+# Get the RSA private keyfile path, so that we can decrypt the repo key
+find_private_key "${1:-}"
+
+# Get the repository root
+find_repository_root "${2:-}"
+
+# Look for the repo key
+find_repo_key
 
 # Get the variable name and value
 if [[ "$#" -ge 3 ]]; then

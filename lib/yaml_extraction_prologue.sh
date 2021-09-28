@@ -44,6 +44,31 @@ function extract_encrypted_variables() {
     done    
 }
 
+# Extract all variables that match "CRYPTIC_ADHOC_SECRET_*"
+function extract_adhoc_encrypted_variables() {
+    # First, extract all top-level variables:
+    (shyaml get-values-0 env <"${1}" || true) |
+    while IFS='' read -r -d '' VARNAME; do
+        # For each variable, check if it's name matches our triggering pattern:
+        if [[ "${VARNAME}" == CRYPTIC_ADHOC_SECRET_* ]]; then
+            printf "%s\n" "${VARNAME:21}"
+        fi
+    done
+
+    # Next, walk the steps and find their environment variables
+    (shyaml get-values-0 steps <"${1}" || true) |
+    while IFS='' read -r -d '' STEP; do
+        # For each step, get its variables
+        (shyaml get-values-0 env <<<"${STEP}" 2>/dev/null || true) |
+        while IFS='' read -r -d '' VARNAME; do
+            # For each variable, check if it's name matches our triggering pattern:
+            if [[ "${VARNAME}" == CRYPTIC_ADHOC_SECRET_* ]]; then
+                printf "%s\n" "${VARNAME:21}"
+            fi
+        done
+    done
+}
+
 # Extract the `files:` section of a cryptic `pipeline.yml` plugin section
 function extract_encrypted_files() {
     # Iterate over the steps in the yaml file

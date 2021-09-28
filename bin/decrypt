@@ -6,8 +6,14 @@
 CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
 source "${CRYPTIC_REPO}/lib/common.sh"
 
-# This reads in command-line parameters such as PRIVATE_KEY_PATH, REPO_ROOT, etc...
-source "${CRYPTIC_REPO}/lib/encrypt_decrypt_prologue.sh"
+# Get the RSA private keyfile path, so that we can decrypt the repo key
+find_private_key "${1:-}"
+
+# Get the repository root
+find_repository_root "${2:-}"
+
+# Look for the repo key
+find_repo_key
 
 # This loads in YAML extraction prologues
 source "${CRYPTIC_REPO}/lib/yaml_extraction_prologue.sh"
@@ -15,6 +21,7 @@ source "${CRYPTIC_REPO}/lib/yaml_extraction_prologue.sh"
 # Extract files and variables from the .yml file
 readarray -t ENCRYPTED_FILES < <(extract_encrypted_files "${YAML_PATH}")
 readarray -t ENCRYPTED_VARIABLES_PAIRED < <(extract_encrypted_variables "${YAML_PATH}")
+readarray -t ENCRYPTED_ADHOC_VARIABLES_PAIRED < <(extract_adhoc_encrypted_variables "${YAML_PATH}")
 
 # Split pairs into name/values for environment variables
 declare -A ENCRYPTED_VARIABLES=()
@@ -23,11 +30,16 @@ for PAIR in "${ENCRYPTED_VARIABLES_PAIRED[@]}"; do
     VALUE="$(echo ${PAIR#*=} | tr -d '"')"
     ENCRYPTED_VARIABLES["${NAME}"]="${VALUE}"
 done
-
+declare -A ENCRYPTED_ADHOC_VARIABLES=()
+for PAIR in "${ENCRYPTED_ADHOC_VARIABLES_PAIRED[@]}"; do
+    NAME="$(echo ${PAIR%%=*} | tr -d '"')"
+    VALUE="$(echo ${PAIR#*=} | tr -d '"')"
+    ENCRYPTED_ADHOC_VARIABLES["${NAME}"]="${VALUE}"
+done
 
 # Start printing out the helpful debugging messages
 cat <<-EOD
-    Parsed out ${#ENCRYPTED_VARIABLES[@]} encrypted variables, ${#ENCRYPTED_FILES[@]} files
+    Parsed out ${#ENCRYPTED_VARIABLES[@]} encrypted variables, ${#ENCRYPTED_FILES[@]} files, ${#ENCRYPTED_ADHOC_VARIABLES[@]} adhoc variables
     When running with appropriate keys setup, the cryptic buildkite plugin will export
     the following environment variables:
 
@@ -36,6 +48,12 @@ EOD
 # Decrypt encrypted variables
 for KEY in "${!ENCRYPTED_VARIABLES[@]}"; do
     VALUE="$(base64dec <<<"${ENCRYPTED_VARIABLES["${KEY}"]}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
+    echo "      -> ${KEY}=${VALUE}"
+done
+
+# Decrypt encrypted ad-hoc variables
+for KEY in "${!ENCRYPTED_ADHOC_VARIABLES[@]}"; do
+    VALUE="$(decrypt_adhoc "${PRIVATE_KEY_PATH}" <<<"${ENCRYPTED_ADHOC_VARIABLES["${KEY}"]}")"
     echo "      -> ${KEY}=${VALUE}"
 done
 

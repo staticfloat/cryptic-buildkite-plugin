@@ -95,6 +95,10 @@ function is_rsa_private_key() {
     openssl rsa -inform PEM -in "${1}" -noout 2>/dev/null
 }
 
+function is_aes_key() {
+    [[ $(wc -c) == 128 ]]
+}
+
 ##############################################################################
 ##############                  AES utilities                   ##############
 ##############################################################################
@@ -142,9 +146,67 @@ function decrypt_aes_key_then_decrypt() {
     trap - EXIT
 }
 
+# Our AES keys are just randomness
+function gen_aes_key() {
+    openssl rand 128
+}
+
 # Generate an AES key then encrypt it with the given RSA key
 function gen_encrypted_aes_key() {
-    openssl rand 128 | encrypt_rsa "${1}"
+    gen_aes_key | encrypt_rsa "${1}"
+}
+
+
+
+# ad-hoc encrypt a secret ${2} with the public key of an agent ${1}.
+# Generates an ad-hoc key, encrypts the secret with that key, then
+# encrypts both with the public key of the agent.
+function encrypt_adhoc() {
+    # No matter what happens, this file dies when we leave
+    local TEMP_KEYFILE=$(mktemp)
+    trap "rm -f ${TEMP_KEYFILE}" EXIT
+
+    # Generate an AES key, save it out to `TEMP_KEYFILE` for `encrypt_aes`
+    gen_aes_key > "${TEMP_KEYFILE}"
+
+
+    # encrypt the AES key with the public key of the agent
+    encrypt_rsa "${1}" <"${TEMP_KEYFILE}" | base64enc
+
+    # Separate with a semicolon
+    echo -n ";"
+
+    # Use AES encryption to generate the encrypted secret
+    encrypt_aes "${TEMP_KEYFILE}" <<<"${2}" | base64enc
+
+    # Clean up our keyfile and our trap
+    shred -u "${TEMP_KEYFILE}"
+    trap - EXIT
+}
+
+# Decrypt an ad-hoc encrypted key/secret pair ${2} with the private
+# key of an agent ${1}.
+function decrypt_adhoc() {
+    # No matter what happens, this file dies when we leave
+    local TEMP_KEYFILE=$(mktemp)
+    trap "rm -f ${TEMP_KEYFILE}" EXIT
+
+    # We need to save stdin after splitting by `;`, so save it in an array
+    readarray -d';' -t ADHOC_PAIR
+
+    # Take the key, decrypt it with our RSA private key
+    base64dec <<<"${ADHOC_PAIR[0]}" | decrypt_rsa "${1}" > "${TEMP_KEYFILE}"
+
+    if ! is_aes_key <"${TEMP_KEYFILE}"; then
+        die "Invalid AES key embedded in ad-hoc secret!"
+    fi
+
+    # Use that decrypted key to decrypt our secret
+    base64dec <<<"${ADHOC_PAIR[1]}" | decrypt_aes "${TEMP_KEYFILE}"
+
+    # Clean up our keyfile and our trap
+    shred -u "${TEMP_KEYFILE}"
+    trap - EXIT
 }
 
 ##############################################################################
@@ -264,4 +326,57 @@ function receive_keys() {
 function cleanup_keys() {
     shred -u "${PRIVATE_KEY_PATH}" "${PUBLIC_KEY_PATH}" "${UNENCRYPTED_REPO_KEY_PATH}"
     unset PRIVATE_KEY_PATH PUBLIC_KEY_PATH UNENCRYPTED_REPO_KEY_PATH RSA_FINGERPRINT
+}
+
+
+function find_private_key() {
+    # Accept command-line arguments if they're given
+    if [[ -n "${1}" ]]; then
+        PRIVATE_KEY_PATH="${1}"
+    else
+        read -p 'Private keyfile location: ' PRIVATE_KEY_PATH
+    fi
+
+    # Double-check this is a valid private key
+    if ! is_rsa_private_key "${PRIVATE_KEY_PATH}"; then
+        die "Not a valid RSA private key: '${PRIVATE_KEY_PATH}'"
+    fi
+}
+
+function find_public_key() {
+    # Accept command-line arguments if they're given
+    if [[ -n "${1}" ]]; then
+        PUBLIC_KEY_PATH="${1}"
+    else
+        read -p 'Public keyfile location: ' PUBLIC_KEY_PATH
+    fi
+
+    # Double-check this is a valid public key
+    if ! is_rsa_public_key "${PUBLIC_KEY_PATH}"; then
+        die "Not a valid RSA public key: '${PUBLIC_KEY_PATH}'"
+    fi
+}
+
+function find_repository_root() {
+    # Accept command-line arguments if they're given
+    if [[ -n "${1}" ]]; then
+        REPO_ROOT="${1}"
+    else
+        # If the user is running this from within a repository that is not `cryptic-buildkite-plugin`, then use it!
+        REPO_ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
+        if [[ -n ${REPO_ORIGIN_URL} ]] && [[ "${REPO_ORIGIN_URL}" != *cryptic-buildkite-plugin* ]]; then
+            REPO_ROOT="$(git rev-parse --show-toplevel)"
+            echo "Autodetected repository with origin '${REPO_ORIGIN_URL}'"
+        else
+            read -p 'Repository location: ' REPO_ROOT
+        fi
+    fi
+}
+
+function find_repo_key() {
+    RSA_FINGERPRINT=$(rsa_fingerprint "${PRIVATE_KEY_PATH}")
+    REPO_KEY_PATH="${REPO_ROOT}/.buildkite/cryptic_repo_keys/repo_key.${RSA_FINGERPRINT:0:8}"
+    if [[ ! -f "${REPO_KEY_PATH}" ]]; then
+        die "repository keyfile ${REPO_KEY_PATH} does not exist!"
+    fi
 }

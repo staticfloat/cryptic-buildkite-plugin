@@ -58,20 +58,19 @@ function create_test_repo() {
 
     # Test creating a repo key works
     run create_repo_key "${dir}/agent.pub" "${dir}/repo"
-    assert_output --partial "Using public key path ${dir}/agent.pub"
     assert_output --partial "Generating 1024-bit AES key"
     assert_success
+    [[ -f "${dir}/agent.pub" ]]
 
     # Test that if run again, it quits out
     run create_repo_key "${dir}/agent.pub" "${dir}/repo"
-    assert_output --partial "Using public key path ${dir}/agent.pub"
     assert_output --partial "ERROR: Key already added to repository"
     assert_failure
+    [[ -f "${dir}/agent.pub" ]]
 
     # Test that if run with a different key, it quits out
     create_agent_keypair "${dir}/second"
     run create_repo_key "${dir}/second.pub" "${dir}/repo"
-    assert_output --partial "Using public key path ${dir}/second.pub"
     assert_output --partial "Other keys already deployed; you should manually decrypt and re-encrypt the repo key instead"
     assert_failure
 
