@@ -71,7 +71,7 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
         HASH_OVERRIDE_VAR="BUILDKITE_PLUGIN_CRYPTIC_SIGNED_PIPELINES_${PIPELINE_IDX}_ALLOW_HASH_OVERRIDE"
         if [[ -v "${HASH_OVERRIDE_VAR}" ]] && [[ "${!HASH_OVERRIDE_VAR}" == "true" ]]; then
             # If we allow committers to override the failing hash check, create a `block` step, then still launch it.
-            cat "${PIPELINE_PATH}" | sed -e "s&^steps:\(.*\)&steps:\\1\\n  - block: \"Bypass failed signature check for '${PIPELINE_PATH}'?\"&" > "${PIPELINE_PATH}.block"
+            cat "${PIPELINE_PATH}" | sed -e "s&^steps:\(.*\)&steps:\\1\\n  - block: \"Bypass failed signature check for '${PIPELINE_PATH}'?\"\\n    blocked_state: \"running\"\\n&" > "${PIPELINE_PATH}.block"
             PIPELINE_PATH="${PIPELINE_PATH}.block"
         else
             # Execute `die` in a subshell so that we can print out failure messages for each pipeline,
