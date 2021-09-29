@@ -42,5 +42,5 @@ cat <<-EOD
     have access to this secret.
 
     env:
-      - CRYPTIC_ADHOC_SECRET_${SECRET_NAME}="${ENCRYPTED_SECRET_VALUE}"
+      CRYPTIC_ADHOC_SECRET_${SECRET_NAME}: "${ENCRYPTED_SECRET_VALUE}"
 EOD

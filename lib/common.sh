@@ -198,7 +198,7 @@ function decrypt_adhoc() {
     base64dec <<<"${ADHOC_PAIR[0]}" | decrypt_rsa "${1}" > "${TEMP_KEYFILE}"
 
     if ! is_aes_key <"${TEMP_KEYFILE}"; then
-        die "Invalid AES key embedded in ad-hoc secret!"
+        die "Invalid AES key embedded in ad-hoc secret, counted $(wc -c <"${TEMP_KEYFILE}") bytes!"
     fi
 
     # Use that decrypted key to decrypt our secret
