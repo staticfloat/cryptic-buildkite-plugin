@@ -41,17 +41,34 @@ function extract_encrypted_variables() {
                 done
             done
         done
-    done    
+    done
 }
 
 # Extract all variables that match "CRYPTIC_ADHOC_SECRET_*"
 function extract_adhoc_encrypted_variables() {
-    # First, extract all top-level variables:
-    (shyaml keys-0 env <"${1}" || true) |
-    while IFS='' read -r -d '' VARNAME; do
-        if [[ "${VARNAME}" == CRYPTIC_ADHOC_SECRET_* ]]; then
-            printf "%s\n" "${VARNAME:21}=$(shyaml get-value env.${VARNAME} <"${1}")"
-        fi
+    # Iterate over the steps in the yaml file
+    (shyaml get-values-0 steps <"${1}" || true) |
+    while IFS='' read -r -d '' STEP; do
+        (shyaml keys-0 env <"${1}" || true) |
+        while IFS='' read -r -d '' VARNAME; do
+            if [[ "${VARNAME}" == CRYPTIC_ADHOC_SECRET_* ]]; then
+                printf "%s\n" "${VARNAME:21}=$(shyaml get-value env.${VARNAME} <"${1}")"
+            fi
+        done
+    done
+
+    # Iterate over the steps in the yaml file
+    (shyaml get-values-0 steps <"${1}" || true) |
+    while IFS='' read -r -d '' STEP; do
+        (shyaml keys-0 env <<<"${STEP}" || true) |
+        while IFS='' read -r -d '' VARNAME; do
+                # For each plugin, if its `cryptic`, extract the variables
+                (shyaml get-values-0 "${PLUGIN_NAME}.variables" <<<"${PLUGINS}" 2>/dev/null || true) |
+                while IFS='' read -r -d '' VAR; do
+                    printf "%s\n" "${VAR}"
+                done
+            done
+        done
     done
 }
 

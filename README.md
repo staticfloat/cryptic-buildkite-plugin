@@ -4,11 +4,89 @@
 # Overview
 
 This plugin enables the deployment and usage of secrets within buildkite pipelines.
-In particular, it prevents untrusted contributors from leaking secrets in sensitive pipelines.
+Files and environment variables can be encrypted with a key that is stored in your repository, itself encrypted by a key that is deployed on a buildkite agent.
+This plugin also allows workflows that prevent untrusted contributors from leaking secrets in sensitive pipelines.
 
 A chain of trust is established starting from the WebUI, as these steps are only editable by repository administrators.
 The WebUI then launches pipelines, using the `cryptic` plugin, which facilitates verification of treehashes before launching pipelines that expect secrets to be available.
 The propagation of the chain of trust after verifying that the repository state has not changed critical files allows unknown contributors to make changes to the majority of the codebase, while retaining a tight leash on critical codepaths that have access to secrets.
+
+## Usage
+
+There are four fundamental capabilities that `cryptic` offers:
+
+  - Decrypting encrypted files
+  - Decrypting encrypted environment variables
+  - Decrypting encrypted "ad-hoc" environment variables
+  - Verifying repository state, then launching child pipelines
+
+### Decrypting files and variables
+
+The first two capabilities are quite straightforward; once your repository is setup properly, you list encrypted variables and files in a `cryptic` plugin instance in your pipeline, like so:
+
+```yml
+steps:
+  - label: "Showcase secrets decrypting"
+    - staticfloat/cryptic:
+        files:
+            # This file is actually only stored as `secret_message.txt.encrypted` in the repo,
+            # and `cryptic` will create the `secret_message.txt` file from it, when it decrypts
+            # in its `post-checkout` step.  It is recommended to `.gitignore` the decrypted file
+            # both for security, to prevent accidental check-in, and so that after decryption,
+            # `git` still thinks the repository state is clean.
+            - ./.buildkite/secrets/secret_message.txt
+        variables:
+            - AWS_CREDENTIALS="U2FsdGVkX19/7cDiPvuDTzfH5phgJJjbzptPc5D3WTwmQsK01j51b5HFjVfFvvwb"
+    commands: |
+        # When writing bash scripts in these .yml files, remember that the buildkite-agent
+        # does variable interpolation itself, so you need to double-escape your dollar signs
+        # when referring to a bash variable that is defined at runtime:
+        echo "To prove that we decrypted 'AWS_CREDENTIALS', here it is: $${AWS_CREDENTIALS}"
+        echo "To prove that we decrypted secret_message.txt, here it is:"
+        cat ./.buildkite/secrets/secret_message.txt
+```
+
+The `cryptic` plugin will decrypt the files and variables, allowing the rest of your pipeline to use the pieces of sensitive data without knowing they were ever encrypted at all.
+
+### Ad-hoc variables
+
+The third capability, ad-hoc environment variables, are an advanced usage where the environment variable must be decrypted before the repository has even been cloned to disk, for instance to deploy an SSH key to the agent so that it can clone the repository at all.
+In the previous examples, the files and variables are encrypted with a key that is stored within the repository itself (which itself is encrypted with a key that is deployed onto the buildkite agent machines), such that in order to decrypt the secrets you need acess to both the agents and the repository.
+With ad-hoc environment variables, you only need access to an agent, which is slightly less secure.
+We recommend only using ad-hoc variables for things like SSH keys, and using the first two capabilities for all other secrets.
+
+### Launching child pipelines
+
+Finally, the fourth capability allows us to generate a chain of trust.
+This is only truly needed if your repository has untrusted collaborators, and you want to run CI on pull requests.
+This allows you to create pipelines that are verified by signatures on treehashes previously embedded within the CI configuration.
+
+In the buildkite WebUI, add a pipeline such as the following:
+
+```yml
+steps:
+  # In the WebUI, the `cryptic` launch job _must_ be the first job to run
+  - label: ":rocket: launch pipelines"
+    plugins:
+      - staticfloat/cryptic:
+          # Our list of pipelines that should be launched (but don't require a signature)
+          # These pipelines can be modified by any contributor and CI will still run.
+          # Build secrets will not be available in these pipelines (or their children)
+          unsigned_pipelines:
+            - .buildkite/pipeline.yml
+          # Our list of pipelines that should be launched (and do require a signature)
+          # If these pipelines are modified, job execution will fail.
+          signed_pipelines:
+            - pipeline: .buildkite/secure_pipeline.yml
+              signature_file: .buildkite/secure_pipeline.yml.signature
+              inputs:
+                - .buildkite/utils/*.sh
+              allow_hash_override: true
+```
+
+In this example, we launch one secure pipeline which will have access to the agent keys to decrypt secrets, but the unsigned pipeline will not, even if a user attempts to add a `cryptic` plugin.
+Since the WebUI starts "privileged", with access to the agent keys, using the `signed_pipelines` is one way to pass the keys on to a child pipeline while simultaneously ensuring that the pipeline (and any other files listed in the `inputs` array) are unchanged since the last time the signature was added.
+The `allow_hash_override` option enables a committer to bypass a failing signature check and force the pipeline to continue running with access to the secrets.
 
 ## Setting up new agents and repositories for `cryptic`
 
