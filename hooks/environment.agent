@@ -23,6 +23,14 @@ function die() {
     exit 1
 }
 
+function base64dec() {
+    tr -d '\n' | openssl base64 -d -A
+}
+
+function base64enc() {
+    openssl base64 -e -A
+}
+
 # Set this to wherever your private key lives
 PRIVATE_KEY_PATH="${SECRETS_MOUNT_POINT}/agent.key"
 PUBLIC_KEY_PATH="${SECRETS_MOUNT_POINT}/agent.pub"
@@ -62,12 +70,42 @@ if ! [[ "${BUILDKITE_INITIAL_JOB_ID}" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdi
     die "Initial job ID does not look like a UUID: '${BUILDKITE_INITIAL_JOB_ID}'"
 fi
 
-# All we do is export a base64-encoded form of the keys for later consumption by the cryptic plugin
 function set_cryptic_privileged() {
+    # The first thing we do is export a base64-encoded form of the keys for later consumption by the cryptic plugin
     echo "Privileged build detected; unlocking private key"
-    export BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PRIVATE_KEY_SECRET="$(openssl base64 -e -A < "${PRIVATE_KEY_PATH}")"
-    export BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PUBLIC_KEY_SECRET="$(openssl base64 -e -A < "${PUBLIC_KEY_PATH}")"
+    export BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PRIVATE_KEY_SECRET="$(base64enc < "${PRIVATE_KEY_PATH}")"
+    export BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PUBLIC_KEY_SECRET="$(base64enc < "${PUBLIC_KEY_PATH}")"
     export BUILDKITE_PLUGIN_CRYPTIC_PRIVILEGED=true
+
+    # The next thing we do is search for `CRYPTIC_ADHOC_SECRET_*` variables and decrypt them.
+    # These should only be used for things like SSH keys, which need to be decrypted before we
+    # even have a chance to check out the repository.
+    for LONG_ADHOC_NAME in $(set | cut -d"=" -f 1 | grep -E "^CRYPTIC_ADHOC_SECRET_[^ ]+"); do
+        EXPORTED_NAME="${LONG_ADHOC_NAME:21}"
+        echo " --> Decrypting ad-hoc secret ${EXPORTED_NAME}"
+
+        # No matter what happens, this file dies when we leave
+        local TEMP_KEYFILE=$(mktemp)
+        trap "rm -f ${TEMP_KEYFILE}" EXIT
+
+        # Use `readarray` to split our combined key/value envvar
+        readarray -d';' -t ADHOC_PAIR <<<"${!LONG_ADHOC_NAME}"
+        
+        # Take the key, decrypt it with our RSA private key
+        base64dec <<<"${ADHOC_PAIR[0]}" | openssl rsautl -decrypt -inkey "${PRIVATE_KEY_PATH}" > "${TEMP_KEYFILE}"
+
+        # Make sure the AES key is the right length
+        if [[ $(wc -c <"${TEMP_KEYFILE}") != "128" ]]; then
+            die "Invalid AES key embedded in ad-hoc secret '${EXPORTED_NAME}', counted '$(wc -c <"${TEMP_KEYFILE}")' bytes instead of 128!"
+        fi
+
+        export "${EXPORTED_NAME}"="$(base64dec <<<"${ADHOC_PAIR[1]}" | openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass "file:${TEMP_KEYFILE}")"
+
+        # Clean up our keyfile and our trap
+        shred -u "${TEMP_KEYFILE}"
+        trap - EXIT
+        unset ADHOC_PAIR
+    done
 }
 
 # Now that we have our keys and our buildkite token, we decide whether the keys should be exported into
@@ -105,4 +143,4 @@ if ! umount "${SECRETS_MOUNT_POINT}" 2>/dev/null; then
 fi
 
 # don't pollute the global namespace
-unset SECRETS_MOUNT_POINT BUILDKITE_TOKEN_PATH BUILDKITE_TOKEN PRIVATE_KEY_PATH
+unset SECRETS_MOUNT_POINT BUILDKITE_TOKEN_PATH BUILDKITE_TOKEN PRIVATE_KEY_PATH ADHOC_PAIR

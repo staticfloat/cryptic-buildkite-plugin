@@ -41,7 +41,21 @@ function extract_encrypted_variables() {
                 done
             done
         done
-    done    
+    done
+}
+
+# Extract all variables that match "CRYPTIC_ADHOC_SECRET_*"
+function extract_adhoc_encrypted_variables() {
+    # Iterate over the steps in the yaml file
+    (shyaml get-values-0 steps <"${1}" || true) |
+    while IFS='' read -r -d '' STEP; do
+        (shyaml keys-0 env <"${1}" || true) |
+        while IFS='' read -r -d '' VARNAME; do
+            if [[ "${VARNAME}" == CRYPTIC_ADHOC_SECRET_* ]]; then
+                printf "%s\n" "${VARNAME:21}=$(shyaml get-value env.${VARNAME} <"${1}")"
+            fi
+        done
+    done
 }
 
 # Extract the `files:` section of a cryptic `pipeline.yml` plugin section
@@ -81,39 +95,48 @@ function extract_pipeline_treehashes() {
     while IFS='' read -r -d '' STEP; do
         # For each step, get its list of plugins
         (shyaml get-values-0 plugins <<<"${STEP}" 2>/dev/null || true) |
-        while IFS='' read -r -d '' PLUGIN; do
-            # For each plugin, if its `cryptic`, walk over the signed pipeliness
-            (shyaml get-values-0 "staticfloat/cryptic.signed_pipelines" <<<"${PLUGIN}" 2>/dev/null || true) |
-            while IFS='' read -r -d '' PIPELINE; do
-                # For each signed pipeline, get its pipeline path and its inputs
-                PIPELINE_PATH="$(shyaml get-value "pipeline" <<<"${PIPELINE}" 2>/dev/null || true)"
-
-                # Start by calculating the treehash of the yaml file
-                INPUT_TREEHASHES=( "$(calc_treehash <<<"${PIPELINE_PATH}")" )
-
-                # Next, calculate the treehash of the rest of the glob patterns
-                for PATTERN in $(shyaml get-values "inputs" <<<"${PIPELINE}" 2>/dev/null || true); do
-                    INPUT_TREEHASHES+=( "$(collect_glob_pattern "${PATTERN}" | calc_treehash)" )
-                done
-                
-                # Calculate full treehash
-                FULL_TREEHASH="$(printf "%s" "${INPUT_TREEHASHES[@]}" | calc_shasum)"
-
-                # If `signature_file` is defined, use it!
-                local BASE64_ENCRYPTED_TREEHASH=""
-                local TREEHASH_FILE_SOURCE=""
-                if shyaml get-value "signature_file" <<<"${PIPELINE}" 2>/dev/null >/dev/null; then
-                    TREEHASH_FILE_SOURCE="$(shyaml get-value "signature_file" <<<"${PIPELINE}" 2>/dev/null)"
-                    if [[ -f "${TREEHASH_FILE_SOURCE}" ]]; then
-                        BASE64_ENCRYPTED_TREEHASH="$(base64enc <"${TREEHASH_FILE_SOURCE}")"
-                    fi
-                else
-                    # Try to extract the signature from the yaml directly too
-                    BASE64_ENCRYPTED_TREEHASH="$(shyaml get-value "signature" <<<"${PIPELINE}" 2>/dev/null || true)"
+        while IFS='' read -r -d '' PLUGINS; do
+            # Get the plugin names
+            (shyaml keys-0 <<<"${PLUGINS}" || true) |
+            while IFS='' read -r -d '' PLUGIN_NAME; do
+                # Skip plugins that are not named `cryptic`
+                if [[ "${PLUGIN_NAME}" != staticfloat/cryptic* ]]; then
+                    continue
                 fi
 
-                # Print out treehash and pipeline path
-                printf "%s&%s&%s&%s\n" "${PIPELINE_PATH}" "${FULL_TREEHASH}" "${BASE64_ENCRYPTED_TREEHASH}" "${TREEHASH_FILE_SOURCE}"
+                # For each plugin, if its `cryptic`, walk over the pipelines
+                (shyaml get-values-0 "${PLUGIN_NAME}.signed_pipelines" <<<"${PLUGINS}" 2>/dev/null || true) |
+                while IFS='' read -r -d '' PIPELINE; do
+                    # For each signed pipeline, get its pipeline path and its inputs
+                    PIPELINE_PATH="$(shyaml get-value "pipeline" <<<"${PIPELINE}" 2>/dev/null || true)"
+
+                    # Start by calculating the treehash of the yaml file
+                    INPUT_TREEHASHES=( "$(calc_treehash <<<"${PIPELINE_PATH}")" )
+
+                    # Next, calculate the treehash of the rest of the glob patterns
+                    for PATTERN in $(shyaml get-values "inputs" <<<"${PIPELINE}" 2>/dev/null || true); do
+                        INPUT_TREEHASHES+=( "$(collect_glob_pattern "${PATTERN}" | calc_treehash)" )
+                    done
+
+                    # Calculate full treehash
+                    FULL_TREEHASH="$(printf "%s" "${INPUT_TREEHASHES[@]}" | calc_shasum)"
+
+                    # If `signature_file` is defined, use it!
+                    local BASE64_ENCRYPTED_TREEHASH=""
+                    local TREEHASH_FILE_SOURCE=""
+                    if shyaml get-value "signature_file" <<<"${PIPELINE}" 2>/dev/null >/dev/null; then
+                        TREEHASH_FILE_SOURCE="$(shyaml get-value "signature_file" <<<"${PIPELINE}" 2>/dev/null)"
+                        if [[ -f "${TREEHASH_FILE_SOURCE}" ]]; then
+                            BASE64_ENCRYPTED_TREEHASH="$(base64enc <"${TREEHASH_FILE_SOURCE}")"
+                        fi
+                    else
+                        # Try to extract the signature from the yaml directly too
+                        BASE64_ENCRYPTED_TREEHASH="$(shyaml get-value "signature" <<<"${PIPELINE}" 2>/dev/null || true)"
+                    fi
+
+                    # Print out treehash and pipeline path
+                    printf "%s&%s&%s&%s\n" "${PIPELINE_PATH}" "${FULL_TREEHASH}" "${BASE64_ENCRYPTED_TREEHASH}" "${TREEHASH_FILE_SOURCE}"
+                done
             done
         done
     done
