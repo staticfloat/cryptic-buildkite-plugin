@@ -56,20 +56,6 @@ function extract_adhoc_encrypted_variables() {
             fi
         done
     done
-
-    # Iterate over the steps in the yaml file
-    (shyaml get-values-0 steps <"${1}" || true) |
-    while IFS='' read -r -d '' STEP; do
-        (shyaml keys-0 env <<<"${STEP}" || true) |
-        while IFS='' read -r -d '' VARNAME; do
-                # For each plugin, if its `cryptic`, extract the variables
-                (shyaml get-values-0 "${PLUGIN_NAME}.variables" <<<"${PLUGINS}" 2>/dev/null || true) |
-                while IFS='' read -r -d '' VAR; do
-                    printf "%s\n" "${VAR}"
-                done
-            done
-        done
-    done
 }
 
 # Extract the `files:` section of a cryptic `pipeline.yml` plugin section
