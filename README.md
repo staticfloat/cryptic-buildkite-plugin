@@ -44,6 +44,11 @@ steps:
         echo "To prove that we decrypted 'AWS_CREDENTIALS', here it is: $${AWS_CREDENTIALS}"
         echo "To prove that we decrypted secret_message.txt, here it is:"
         cat ./.buildkite/secrets/secret_message.txt
+
+# Note, if this is a child pipeline launched by the webUI config, you MUST put this here to
+# inherit privileges from the parent pipeline.
+env:
+  BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET: ${BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET?}
 ```
 
 The `cryptic` plugin will decrypt the files and variables, allowing the rest of your pipeline to use the pieces of sensitive data without knowing they were ever encrypted at all.
