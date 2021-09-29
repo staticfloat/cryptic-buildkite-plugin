@@ -66,11 +66,20 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
         base64dec <<<"${!SIGNATURE_VAR}" >"${SIGNATURE_FILE}"
     fi
     if [[ "$(decrypt_aes "${UNENCRYPTED_REPO_KEY_PATH}" <"${SIGNATURE_FILE}")" != "${FULL_TREEHASH}" ]]; then
-        # Execute `die` in a subshell so that we can print out failure messages for each pipeline,
-        # then fail out once at the end, ignoring the `exit` and failure that it creates.
-        (die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash signature check!  You may need to re-run cryptic/bin/sign_treehashes!"; ) || true
-        SHOULD_FAIL=true
-        continue
+        echo "Pipeline '${PIPELINE_PATH}' fails treehash siganture check!  You may need to re-run cryptic/bin/sign_treehashes!"
+
+        HASH_OVERRIDE_VAR="BUILDKITE_PLUGIN_CRYPTIC_SIGNED_PIPELINES_${PIPELINE_IDX}_ALLOW_HASH_OVERRIDE"
+        if [[ -v "${HASH_OVERRIDE_VAR}" ]] && [[ "${!HASH_OVERRIDE_VAR}" == "true" ]]; then
+            # If we allow committers to override the failing hash check, create a `block` step, then still launch it.
+            cat "${PIPELINE_PATH}" | sed -e "s&^steps:\(.*\)&steps:\\1\\n  - block: \"Bypass failed signature check for '${PIPELINE_PATH}'?\"\\n    blocked_state: \"running\"\\n&" > "${PIPELINE_PATH}.block"
+            PIPELINE_PATH="${PIPELINE_PATH}.block"
+        else
+            # Execute `die` in a subshell so that we can print out failure messages for each pipeline,
+            # then fail out once at the end, ignoring the `exit` and failure that it creates.
+            (die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash signature check!  You may need to re-run cryptic/bin/sign_treehashes!"; ) || true
+            SHOULD_FAIL=true
+            continue
+        fi
     fi
 
     # If we passed, launch the pipeline!
