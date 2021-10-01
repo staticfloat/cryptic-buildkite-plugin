@@ -34,6 +34,14 @@ done
 SHOULD_FAIL=false
 for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
     PIPELINE_PATH="${SIGNED_PIPELINES[${PIPELINE_IDX}]}"
+    SANITIZED_PIPELINE_PATH="$(basename "${PIPELINE_PATH}" | tr '/' '-' | tr '.' '-' | tr ' ' '_')"
+
+    # Perform sanity checks such as ensuring that this pipeline will receive the key
+    if [[ -z "$(grep "BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET" "${PIPELINE_PATH}")" ]]; then
+        (die "Pipeline ${PIPELINE_PATH} does not contain an env mapping for BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET!"; ) || true
+        SHOULD_FAIL=true
+        continue
+    fi
 
     # Hash up the inputs
     readarray -d '' -t PIPELINE_INPUTS < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_SIGNED_PIPELINES_${PIPELINE_IDX}_INPUTS")
@@ -66,12 +74,31 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
         base64dec <<<"${!SIGNATURE_VAR}" >"${SIGNATURE_FILE}"
     fi
     if [[ "$(decrypt_aes "${UNENCRYPTED_REPO_KEY_PATH}" <"${SIGNATURE_FILE}")" != "${FULL_TREEHASH}" ]]; then
-        echo "Pipeline '${PIPELINE_PATH}' fails treehash siganture check!  You may need to re-run cryptic/bin/sign_treehashes!"
+        SIGNATURE_FAIL_MSG="Pipeline '${PIPELINE_PATH}' fails treehash siganture check!  You may need to re-run cryptic/bin/sign_treehashes!"
+        echo "${SIGNATURE_FAIL_MSG}" >&2
 
         HASH_OVERRIDE_VAR="BUILDKITE_PLUGIN_CRYPTIC_SIGNED_PIPELINES_${PIPELINE_IDX}_ALLOW_HASH_OVERRIDE"
         if [[ -v "${HASH_OVERRIDE_VAR}" ]] && [[ "${!HASH_OVERRIDE_VAR}" == "true" ]]; then
             # If we allow committers to override the failing hash check, create a `block` step, then still launch it.
-            cat "${PIPELINE_PATH}" | sed -e "s&^steps:\(.*\)&steps:\\1\\n  - block: \"Bypass failed signature check for '${PIPELINE_PATH}'?\"\\n    blocked_state: \"running\"\\n&" > "${PIPELINE_PATH}.block"
+            # To do so, we require each of the pipeline's steps to contain a `depends_on` node:
+            NUM_STEPS=$( (grep -E "^  - " "${PIPELINE_PATH}" || true) | wc -l)
+            NUM_DEPENDS_ON=$( (grep -E "^    depends_on:" "${PIPELINE_PATH}" || true) | wc -l)
+            if [[ "${NUM_DEPENDS_ON}" -lt "${NUM_STEPS}" ]]; then
+                (die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' looks like it lacks some 'depends_on' nodes!"; ) || true
+                SHOULD_FAIL=true
+            fi
+
+            # Notify the user that they probably need to re-sign something
+            BLOCK_KEY="cryptic-block-${SANITIZED_PIPELINE_PATH}"
+            buildkite-agent annotate --style=warning --context="${BLOCK_KEY}" "${SIGNATURE_FAIL_MSG}"
+
+            cat "${PIPELINE_PATH}" |
+                # Insert a block step as the first step in this pipeline
+                sed -e "s&^steps:\(.*\)&steps:\\1\n  - block: \"Bypass failed signature check for '${PIPELINE_PATH}'?\"\n    blocked_state: \"running\"\n    key: \"${BLOCK_KEY}\"&" |
+                # Each other step in the secure pipeline _must_ have a `depends_on`, which we then add to:
+                sed -e "s&^    depends_on:&    depends_on:\n     - \"${BLOCK_KEY}\"\n&" > "${PIPELINE_PATH}.block"
+            echo "Printing out altered pipeline:"
+            cat "${PIPELINE_PATH}.block"
             PIPELINE_PATH="${PIPELINE_PATH}.block"
         else
             # Execute `die` in a subshell so that we can print out failure messages for each pipeline,
@@ -82,7 +109,7 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
         fi
     fi
 
-    # If we passed, launch the pipeline!
+    # If we passed, try to launch the pipeline!
     echo " -> Launching ${PIPELINE_PATH}"
     buildkite-agent pipeline upload "${PIPELINE_PATH}"
 done
