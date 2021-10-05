@@ -37,8 +37,8 @@ for TRIPLET in "${PIPELINE_TREEHASH_TRIPLETS[@]}"; do
     PIPELINE_TREEHASH_FILESOURCE="$(cut -d'&' -f4 <<<"${TRIPLET}" | tr -d '"')"
 
     PIPELINE_ENCRYPTED_TREEHASH="$(decrypt_aes_key_then_encrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <<<"${PIPELINE_TREEHASH}" | base64enc)"
-    if [[ -f "${PIPELINE_TREEHASH_FILESOURCE}" ]]; then
-        base64dec <<<"${PIPELINE_ENCRYPTED_TREEHASH}" >"${PIPELINE_TREEHASH_FILESOURCE}"
+    if [[ -f "${REPO_ROOT}/${PIPELINE_TREEHASH_FILESOURCE}" ]]; then
+        base64dec <<<"${PIPELINE_ENCRYPTED_TREEHASH}" >"${REPO_ROOT}/${PIPELINE_TREEHASH_FILESOURCE}"
         cat <<-EOD
             - pipeline: ${PIPELINE_PATH}
               signature_file: ${PIPELINE_TREEHASH_FILESOURCE}
