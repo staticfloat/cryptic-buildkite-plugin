@@ -42,6 +42,8 @@ function vcat() {
 # We require `openssl` for basically everything
 if [[ -z "$(which openssl 2>/dev/null)" ]]; then
     die "'openssl' tool required!"
+elif [[ "$(openssl version)" == "LibreSSL 2"* ]]; then
+    die "'openssl' tool outdated!  If you're on macOS, try 'brew install openssl', then add it to the PATH!"
 fi
 
 # Figure out which shasum program to use
