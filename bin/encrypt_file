@@ -5,22 +5,20 @@
 
 # Load common tools
 CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/argparse.sh"
 source "${CRYPTIC_REPO}/lib/common.sh"
 
-# Get the RSA private keyfile path, so that we can decrypt the repo key
-find_private_key "${1:-}"
-
 # Get the repository root
-find_repository_root "${2:-}"
+find_repository_root
 
 # Look for the repo key
 find_repo_key
 
-# Get the file path to encrypt
-if [[ "$#" -ge 3 ]]; then
-    FILE_PATH="${3}"
+# Get the file paths to encrypt
+if [[ "$#" -ge 1 ]]; then
+    FILE_PATH="${1}"
 else
-    read -p 'File to encrypt: ' FILE_PATH
+    read -e -p 'File to encrypt: ' FILE_PATH
 fi
 
 # FILE_PATH can be either a REPO_ROOT-relative path, or an absolute path
@@ -36,19 +34,38 @@ if [[ -f "${ENC_FILE_PATH}" ]]; then
 fi
 
 # Do the actual encryption
-decrypt_aes_key_then_encrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <"${REPO_ROOT}/${FILE_PATH}" >"${ENC_FILE_PATH}"
+encrypt_aes "${REPO_KEY_PATH}" <"${REPO_ROOT}/${FILE_PATH}" >"${ENC_FILE_PATH}"
 
 cat <<-EOD
     Congratulations, you have successfully encrypted a secret.
 
-    The file has been encrypted into a '.encrypted' file; if you had previously checked
-	the unencrypted file into your git repository, you must delete its history to truly
-	eliminate it; I suggest using a tool such as the excellent 'git-filter-repo' tool
-	to do this: https://github.com/newren/git-filter-repo
+    The file has been encrypted into the path '${FILE_PATH}.encrypted'.
+EOD
 
-	You should furthermore add this file to a '.gitignore', so that the unencrypted file
-	does not cause the git repository to appear dirty (and to prevent accidental check-
-	ins in the future).
+# Check to see if the unencrypted file is `.gitignored` already:
+if ! git -C "${REPO_ROOT}" check-ignore -q "${REPO_ROOT}/${FILE_PATH}"; then
+    # If it hasn't been, add it to a `.gitignore` automatically
+    GITIGNORE_PATH="$(dirname "${REPO_ROOT}/${FILE_PATH}")/.gitignore"
+    basename "${FILE_PATH}" >> "${GITIGNORE_PATH}"
+
+    # Check to see if it was ever added to a git repository:
+    if [[ "$(git log --all --pretty=format: --name-only --diff-filter=A "${REPO_ROOT}/${FILE_PATH}" | wc -l)" -gt 0 ]]; then
+        cat <<-EOD
+
+        It appears that it was previously checked into this repository; we highly recommend
+        deleting its history to truly eliminate it.  We suggest using a tool such as the
+        excellent 'git-filter-repo' to do this: https://github.com/newren/git-filter-repo
+EOD
+    fi
+
+    cat <<-EOD
+
+    We have automatically added a rule to ${GITIGNORE_PATH} to ignore the unencrypted
+    file in the future, please verify that the ignore pattern is as you wish it to be.
+EOD
+fi
+
+cat <<-EOD
 
     Add the following plugin stanza to the step you want to have access to the secret.
     Be sure to minimize the number of steps that have access to this secret information, as

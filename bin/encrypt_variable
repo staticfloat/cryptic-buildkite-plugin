@@ -4,41 +4,37 @@
 
 # Load common tools
 CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/argparse.sh"
 source "${CRYPTIC_REPO}/lib/common.sh"
 
-# This reads in command-line parameters such as PRIVATE_KEY_PATH, REPO_ROOT, etc...
-# Get the RSA private keyfile path, so that we can decrypt the repo key
-find_private_key "${1:-}"
-
 # Get the repository root
-find_repository_root "${2:-}"
+find_repository_root
 
 # Look for the repo key
 find_repo_key
 
 # Get the variable name and value
-if [[ "$#" -ge 3 ]]; then
-    SECRET_NAME="${3}"
+if [[ "$#" -ge 1 ]]; then
+    SECRET_NAME="${1}"
 else
-    read -p 'Variable name: ' SECRET_NAME
+    read -p 'Secret name: ' SECRET_NAME
 fi
 
 # Read in secret value
-if [ "$#" -ge 4 ]; then
-    SECRET_VALUE="${4}"
+if [ "$#" -ge 2 ]; then
+    SECRET_VALUE="${2}"
 else
-    read -sp 'Secret value: ' SECRET_VALUE
-    echo "${SECRET_VALUE}" | sed 's/./*/g'
+    read_secret -p "Secret value: " SECRET_VALUE
 fi
 
 # Do the actual encryption
-ENCRYPTED_SECRET_VALUE="$(decrypt_aes_key_then_encrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <<<"${SECRET_VALUE}" | base64enc)"
+ENCRYPTED_SECRET_VALUE="$(encrypt_aes "${REPO_KEY_PATH}" <<<"${SECRET_VALUE}" | base64enc)"
 
 cat <<-EOD
 
     Congratulations, you have successfully encrypted a secret variable.
 
-    You should add the following plugin to the step you want to have access to the secret.
+    You should add the following plugin to the steps you want to have access to the secret.
     Be sure to minimize the number of steps that have access to this secret information, as
     for true security you should lock down the CI configuration through treehashing your
     repository's pipeline.yaml files.  See the top-level README.md for more information on

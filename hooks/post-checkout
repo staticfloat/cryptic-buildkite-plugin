@@ -32,7 +32,7 @@ if [[ "${#ENCRYPTED_FILES[@]}" -gt 0 ]]; then
         fi
 
         echo " -> Decrypting ${FILE_PATH}"
-        decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <"${ENC_FILE_PATH}" >"${FILE_PATH}"
+        decrypt_aes_key_then_decrypt "${AGENT_PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <"${ENC_FILE_PATH}" >"${FILE_PATH}"
     done
 fi
 
@@ -44,14 +44,14 @@ if [[ "${#ENCRYPTED_VARIABLES[@]}" -gt 0 ]]; then
         SECRET_VALUE_BASE64="$(echo ${PAIR#*=} | tr -d '"')"
 
         echo " -> Decrypting ${VARNAME}"
-        VALUE="$(base64dec <<<"${SECRET_VALUE_BASE64}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
+        VALUE="$(base64dec <<<"${SECRET_VALUE_BASE64}" | decrypt_aes_key_then_decrypt "${AGENT_PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
 
         export "${VARNAME}"="${VALUE}"
     done
 fi
 
 # Sign the initial buildkite job ID, for future launch needs
-export BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET=$(echo "${BUILDKITE_INITIAL_JOB_ID}" | sign_rsa "${PRIVATE_KEY_PATH}" | base64enc)
+export BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET=$(echo "${BUILDKITE_INITIAL_JOB_ID}" | sign_rsa "${AGENT_PRIVATE_KEY_PATH}" | base64enc)
 
 # Clean up the values we're not using anymore
 cleanup_keys
