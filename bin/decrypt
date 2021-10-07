@@ -4,79 +4,96 @@
 
 # Load common tools
 CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/argparse.sh"
 source "${CRYPTIC_REPO}/lib/common.sh"
-
-# Get the RSA private keyfile path, so that we can decrypt the repo key
-find_private_key "${1:-}"
+source "${CRYPTIC_REPO}/lib/yaml_extraction_prologue.sh"
 
 # Get the repository root
-find_repository_root "${2:-}"
+find_repository_root
 
 # Look for the repo key
 find_repo_key
 
-# This loads in YAML extraction prologues
-source "${CRYPTIC_REPO}/lib/yaml_extraction_prologue.sh"
+# Get paths to our yml files
+find_yaml_paths "${1:-}"
 
-# Extract files and variables from the .yml file
-readarray -t ENCRYPTED_FILES < <(extract_encrypted_files "${YAML_PATH}")
-readarray -t ENCRYPTED_VARIABLES_PAIRED < <(extract_encrypted_variables "${YAML_PATH}")
-readarray -t ENCRYPTED_ADHOC_VARIABLES_PAIRED < <(extract_adhoc_encrypted_variables "${YAML_PATH}")
+for YAML_PATH in ${YAML_PATHS[@]}; do
+    echo "Decrypting ${YAML_PATH}..."
 
-# Split pairs into name/values for environment variables
-declare -A ENCRYPTED_VARIABLES=()
-for PAIR in "${ENCRYPTED_VARIABLES_PAIRED[@]}"; do
-    NAME="$(echo ${PAIR%%=*} | tr -d '"')"
-    VALUE="$(echo ${PAIR#*=} | tr -d '"')"
-    ENCRYPTED_VARIABLES["${NAME}"]="${VALUE}"
-done
-declare -A ENCRYPTED_ADHOC_VARIABLES=()
-for PAIR in "${ENCRYPTED_ADHOC_VARIABLES_PAIRED[@]}"; do
-    NAME="$(echo ${PAIR%%=*} | tr -d '"')"
-    VALUE="$(echo ${PAIR#*=} | tr -d '"')"
-    ENCRYPTED_ADHOC_VARIABLES["${NAME}"]="${VALUE}"
-done
+    # Extract files and variables from the .yml file
+    readarray -t ENCRYPTED_FILES < <(extract_encrypted_files "${YAML_PATH}")
+    readarray -t ENCRYPTED_VARIABLES_PAIRED < <(extract_encrypted_variables "${YAML_PATH}")
+    readarray -t ENCRYPTED_ADHOC_VARIABLES_PAIRED < <(extract_adhoc_encrypted_variables "${YAML_PATH}")
 
-# Start printing out the helpful debugging messages
-cat <<-EOD
-    Parsed out ${#ENCRYPTED_VARIABLES[@]} encrypted variables, ${#ENCRYPTED_FILES[@]} files, ${#ENCRYPTED_ADHOC_VARIABLES[@]} adhoc variables
-    When running with appropriate keys setup, the cryptic buildkite plugin will export
-    the following environment variables:
+    # Split pairs into name/values for environment variables
+    declare -A ENCRYPTED_VARIABLES=()
+    for PAIR in "${ENCRYPTED_VARIABLES_PAIRED[@]}"; do
+        NAME="$(echo ${PAIR%%=*} | tr -d '"')"
+        VALUE="$(echo ${PAIR#*=} | tr -d '"')"
+        ENCRYPTED_VARIABLES["${NAME}"]="${VALUE}"
+    done
+    declare -A ENCRYPTED_ADHOC_VARIABLES=()
+    for PAIR in "${ENCRYPTED_ADHOC_VARIABLES_PAIRED[@]}"; do
+        NAME="$(echo ${PAIR%%=*} | tr -d '"')"
+        VALUE="$(echo ${PAIR#*=} | tr -d '"')"
+        ENCRYPTED_ADHOC_VARIABLES["${NAME}"]="${VALUE}"
+    done
+
+    # Skip this file completely if nothing is found in it.
+    if [[ "${#ENCRYPTED_VARIABLES[@]}${#ENCRYPTED_FILES[@]}${#ENCRYPTED_ADHOC_VARIABLES[@]}" == "000" ]]; then
+        vecho " -> Skipping, as no encrypted values found"
+        continue
+    fi
+
+    # If we have any encrypted adhoc variables, we're going to need an agent private key to print them out
+    if [[ "${#ENCRYPTED_ADHOC_VARIABLES[@]}" -gt 0 ]]; then
+        find_private_key
+    fi
+
+    # Start printing out the helpful debugging messages
+    echo " -> Found ${#ENCRYPTED_VARIABLES[@]} encrypted variables, ${#ENCRYPTED_FILES[@]} files, and ${#ENCRYPTED_ADHOC_VARIABLES[@]} adhoc variables"
+    
+
+    cat <<-EOD
+    
+    When running with appropriate keys setup, the cryptic plugin
+    will export the following environment variables:
 
 EOD
 
-# Decrypt encrypted variables
-for KEY in "${!ENCRYPTED_VARIABLES[@]}"; do
-    VALUE="$(base64dec <<<"${ENCRYPTED_VARIABLES["${KEY}"]}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
-    echo "      -> ${KEY}=${VALUE}"
-done
+    # Decrypt encrypted variables
+    for KEY in "${!ENCRYPTED_VARIABLES[@]}"; do
+        VALUE="$(base64dec <<<"${ENCRYPTED_VARIABLES["${KEY}"]}" | decrypt_aes "${REPO_KEY_PATH}")"
+        echo "      -> ${KEY}=${VALUE}"
+    done
 
-# Decrypt encrypted ad-hoc variables
-for KEY in "${!ENCRYPTED_ADHOC_VARIABLES[@]}"; do
-    VALUE="$(decrypt_adhoc "${PRIVATE_KEY_PATH}" <<<"${ENCRYPTED_ADHOC_VARIABLES["${KEY}"]}")"
-    echo "      -> ${KEY}=${VALUE}"
-done
+    # Decrypt encrypted ad-hoc variables
+    for KEY in "${!ENCRYPTED_ADHOC_VARIABLES[@]}"; do
+        VALUE="$(decrypt_adhoc_value "${AGENT_PRIVATE_KEY_PATH}" <<<"${ENCRYPTED_ADHOC_VARIABLES["${KEY}"]}")"
+        echo "      -> ${KEY}=${VALUE}"
+    done
 
-# Spacer for visual blocking
-cat <<-EOD
+    if [[ "${#ENCRYPTED_FILES[@]}" -gt 0 ]]; then
+        # Spacer for visual blocking
+        echo
+        echo
+        echo "And the following files:" 
 
+        # Decrypt actual files
+        for FILE_PATH in "${ENCRYPTED_FILES[@]}"; do
+            ENC_FILE_PATH="${REPO_ROOT}/${FILE_PATH}.encrypted"
+            if [[ ! -f "${ENC_FILE_PATH}" ]]; then
+                die "Requested to decrypt '${FILE_PATH}.encrypted' but it does not exist inside of ${REPO_ROOT}!"
+            fi
 
-    And the following files:
-EOD
+            SKIPPED_MSG=""
+            if [[ ! -f "${REPO_ROOT}/${FILE_PATH}" ]]; then
+                decrypt_aes "${REPO_KEY_PATH}" <"${ENC_FILE_PATH}" >"${REPO_ROOT}/${FILE_PATH}"
+            else
+                SKIPPED_MSG=", skipped"
+            fi
 
-# Decrypt actual files
-for FILE_PATH in "${ENCRYPTED_FILES[@]}"; do
-    ENC_FILE_PATH="${REPO_ROOT}/${FILE_PATH}.encrypted"
-    if [[ ! -f "${ENC_FILE_PATH}" ]]; then
-        die "Requested to decrypt '${FILE_PATH}.encrypted' but it does not exist inside of ${REPO_ROOT}!"
+            echo "      -> ${FILE_PATH} ($(filesize "${REPO_ROOT}/${FILE_PATH}")kb${SKIPPED_MSG})"
+        done
     fi
-
-    SKIPPED_MSG=""
-    if [[ ! -f "${REPO_ROOT}/${FILE_PATH}" ]]; then
-        decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <"${ENC_FILE_PATH}" >"${REPO_ROOT}/${FILE_PATH}"
-    else
-        SKIPPED_MSG=", skipped"
-    fi
-
-    echo "      -> ${FILE_PATH} ($(filesize "${REPO_ROOT}/${FILE_PATH}")kb${SKIPPED_MSG})"
 done

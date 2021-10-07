@@ -6,28 +6,31 @@
 
 # Load common tools
 CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/argparse.sh"
 source "${CRYPTIC_REPO}/lib/common.sh"
 
+# Get the repository root
+find_repository_root
+
 # Get the RSA public keyfile path, so that we can create and encrypt a key/secret pair
-find_public_key "${1:-}"
+find_public_key
 
 # Get the variable name and value
-if [[ "$#" -ge 2 ]]; then
-    SECRET_NAME="${2}"
+if [[ "$#" -ge 1 ]]; then
+    SECRET_NAME="${1}"
 else
     read -p 'Variable name: ' SECRET_NAME
 fi
 
 # Read in secret value
-if [ "$#" -ge 3 ]; then
-    SECRET_VALUE="${3}"
+if [ "$#" -ge 2 ]; then
+    SECRET_VALUE="${2}"
 else
-    read -sp 'Secret value: ' SECRET_VALUE
-    echo "${SECRET_VALUE}" | sed 's/./*/g'
+    read_secret -p "Secret value: " SECRET_VALUE
 fi
 
 
-ENCRYPTED_SECRET_VALUE="$(encrypt_adhoc "${PUBLIC_KEY_PATH}" "${SECRET_VALUE}")"
+ENCRYPTED_SECRET_VALUE="$(encrypt_adhoc_value "${AGENT_PUBLIC_KEY_PATH}" "${SECRET_VALUE}")"
 
 cat <<-EOD
 
@@ -38,8 +41,8 @@ cat <<-EOD
     tools 'encrypt_file' or 'encrypt_variable' to get a more compartmentalized security
     barrier around your secrets.
 
-    You should add the following environment variable stanza to the pipelines you want to
-    have access to this secret.
+    You should add the following environment variable stanza to the steps in pipelines
+    you want to have access to this secret.
 
     env:
       CRYPTIC_ADHOC_SECRET_${SECRET_NAME}: "${ENCRYPTED_SECRET_VALUE}"

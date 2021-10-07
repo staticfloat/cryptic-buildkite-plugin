@@ -19,9 +19,31 @@ function die() {
     exit 1
 }
 
+# Returns true if verbose mode is enabled
+VERBOSE="${VERBOSE:-false}"
+function verbose() {
+    [[ "${VERBOSE}" == "true" ]]
+}
+
+# Prints things out, but only if we're verbose
+function vecho() {
+    if verbose; then
+        echo "$@" >&2
+    fi
+}
+function vcat() {
+    if verbose; then
+        cat >&2
+    else
+        cat >/dev/null
+    fi
+}
+
 # We require `openssl` for basically everything
 if [[ -z "$(which openssl 2>/dev/null)" ]]; then
     die "'openssl' tool required!"
+elif [[ "$(openssl version)" == "LibreSSL 2"* ]]; then
+    die "'openssl' tool outdated!  If you're on macOS, try 'brew install openssl', then add it to the PATH!"
 fi
 
 # Figure out which shasum program to use
@@ -46,7 +68,7 @@ function base64dec() {
     tr -d '\n' | openssl base64 -d -A
 }
 
-# Generate N bytes ofrandom gibberish (encoded as base64, with no linebreaks) to stdout
+# Generate N bytes of random gibberish (encoded as base64, with no linebreaks) to stdout
 function randbase64() {
     openssl rand -base64 "${1}" | tr -d '\n'
 }
@@ -161,7 +183,7 @@ function gen_encrypted_aes_key() {
 # ad-hoc encrypt a secret ${2} with the public key of an agent ${1}.
 # Generates an ad-hoc key, encrypts the secret with that key, then
 # encrypts both with the public key of the agent.
-function encrypt_adhoc() {
+function encrypt_adhoc_value() {
     # No matter what happens, this file dies when we leave
     local TEMP_KEYFILE=$(mktemp)
     trap "rm -f ${TEMP_KEYFILE}" EXIT
@@ -186,7 +208,7 @@ function encrypt_adhoc() {
 
 # Decrypt an ad-hoc encrypted key/secret pair ${2} with the private
 # key of an agent ${1}.
-function decrypt_adhoc() {
+function decrypt_adhoc_value() {
     # No matter what happens, this file dies when we leave
     local TEMP_KEYFILE=$(mktemp)
     trap "rm -f ${TEMP_KEYFILE}" EXIT
@@ -274,12 +296,182 @@ function calc_treehash() {
 
 
 ##############################################################################
+##############          utiltiies for bin/ scripts              ##############
+##############################################################################
+
+
+
+function find_private_key() {
+    # This is where we typically cache our private key
+    DEFAULT_AGENT_PRIVATE_KEY_PATH="${REPO_ROOT}/.buildkite/cryptic_repo_keys/agent.key"
+
+    # Allow the user to provide this through an environment variable
+    if [[ -v "CRYPTIC_AGENT_PRIVATE_KEY_PATH" ]]; then
+        AGENT_PRIVATE_KEY_PATH="${CRYPTIC_AGENT_PRIVATE_KEY_PATH}"
+    fi
+
+    # If we haven't already set `AGENT_PRIVATE_KEY_PATH` (e.g. from `argparse.sh`)
+    # then first check to see if it's added to this repository:
+    if [[ ! -v "AGENT_PRIVATE_KEY_PATH" ]]; then
+        if [[ ! -f "${DEFAULT_AGENT_PRIVATE_KEY_PATH}" ]]; then
+            # If we don't already have an agent private key cached in our `cryptic_repo_keys`
+            # ask for it from the user, then symlink it into our cached location
+            read -p 'Private keyfile location: ' AGENT_PRIVATE_KEY_PATH
+        else
+            AGENT_PRIVATE_KEY_PATH="${DEFAULT_AGENT_PRIVATE_KEY_PATH}"
+        fi
+    fi
+
+    # Double-check this is a valid private key
+    if ! is_rsa_private_key "${AGENT_PRIVATE_KEY_PATH}"; then
+        die "Not a valid RSA private key: '${AGENT_PRIVATE_KEY_PATH}'"
+    fi
+
+    # If we've successfully found a private key, if it's externally-provided, lets
+    # cache its location in our `cryptic_repo_keys` folder
+    if [[ ! -e "${AGENT_PRIVATE_KEY_PATH}" ]]; then
+        mkdir -p "$(dirname "${AGENT_PRIVATE_KEY_PATH}")"
+        ln -s "${DEFAULT_AGENT_PRIVATE_KEY_PATH}" "${AGENT_PRIVATE_KEY_PATH}"
+    fi
+}
+
+function find_public_key() {
+    # This is where we typically cache our public key
+    DEFAULT_AGENT_PUBLIC_KEY_PATH="${REPO_ROOT}/.buildkite/cryptic_repo_keys/agent.pub"
+
+    # Allow the user to provide this through an environment variable
+    if [[ -v "CRYPTIC_AGENT_PUBLIC_KEY_PATH" ]]; then
+        AGENT_PUBLIC_KEY_PATH="${CRYPTIC_AGENT_PUBLIC_KEY_PATH}"
+    fi
+
+    # If we haven't already set `AGENT_PUBLIC_KEY_PATH` (e.g. from `argparse.sh`)
+    # then first check to see if it's added to this repository:
+    if [[ ! -v "AGENT_PUBLIC_KEY_PATH" ]]; then
+        if [[ ! -f "${DEFAULT_AGENT_PUBLIC_KEY_PATH}" ]]; then
+            # If we don't already have an agent public key cached in our `cryptic_repo_keys`
+            # ask for it from the user, then symlink it into our cached location
+            read -p 'Public keyfile location: ' AGENT_PUBLIC_KEY_PATH
+        else
+            AGENT_PUBLIC_KEY_PATH="${DEFAULT_AGENT_PUBLIC_KEY_PATH}"
+        fi
+    fi
+
+    # Double-check this is a valid public key
+    if ! is_rsa_public_key "${AGENT_PUBLIC_KEY_PATH}"; then
+        die "Not a valid RSA public key: '${AGENT_PUBLIC_KEY_PATH}'"
+    fi
+
+    # If we've successfully found a public key, if it's externally-provided, lets
+    # cache its location in our `cryptic_repo_keys` folder
+    if [[ ! -e "${AGENT_PUBLIC_KEY_PATH}" ]]; then
+        mkdir -p "$(dirname "${AGENT_PUBLIC_KEY_PATH}")"
+        ln -s "${DEFAULT_AGENT_PUBLIC_KEY_PATH}" "${AGENT_PUBLIC_KEY_PATH}"
+    fi
+}
+
+function find_repository_root() {
+    if [[ ! -v "REPO_ROOT" ]]; then
+        # If the user is running this from within a repository that is not `cryptic-buildkite-plugin`, then use it!
+        REPO_ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
+        if [[ -n ${REPO_ORIGIN_URL} ]] && [[ "${REPO_ORIGIN_URL}" != *cryptic-buildkite-plugin* ]]; then
+            REPO_ROOT="$(git rev-parse --show-toplevel)"
+            echo "Autodetected repository with origin '${REPO_ORIGIN_URL}'"
+        else
+            # Otherwise, just ask the user
+            read -p 'Repository location: ' REPO_ROOT
+        fi
+    fi
+
+    # Trim trailing slashes, because they're ugly
+    REPO_ROOT="${REPO_ROOT%%+(/)}"
+}
+
+function find_repo_key() {
+    # First, check to see if we have a decrypted repo key:
+    REPO_KEY_PATH="${REPO_ROOT}/.buildkite/cryptic_repo_keys/repo_key"
+    if [[ -f "${REPO_KEY_PATH}" ]]; then
+        return
+    fi
+
+    # If we don't have a decrypted repo key, let's try decrypting one using an agent private key, if we have it
+    if [[ -v "AGENT_PRIVATE_KEY_PATH" ]]; then
+        RSA_FINGERPRINT=$(rsa_fingerprint "${AGENT_PRIVATE_KEY_PATH}")
+        ENCRYPTED_REPO_KEY_PATH="${REPO_ROOT}/.buildkite/cryptic_repo_keys/repo_key.${RSA_FINGERPRINT:0:8}"
+        if [[ -f "${ENCRYPTED_REPO_KEY_PATH}" ]]; then
+            # Decrypt the RSA-encrypted AES key into our unencrypted key path
+            decrypt_rsa "${AGENT_PRIVATE_KEY_PATH}" <"${ENCRYPTED_REPO_KEY_PATH}" >"${REPO_KEY_PATH}"
+            return
+        fi
+    fi
+
+    # Otherwise, let's complain that we can't find our repository key
+    die "repository keyfile not found, or no private agent key available to decrypt!"
+}
+
+function find_yaml_paths() {
+    # First, check to see if we've already collected a set of YAML paths:
+    if [[ -v "YAML_PATHS" ]]; then
+        return
+    fi
+
+    # We'll collect a glob pattern if we've been given it, defaulting to searching
+    # ${REPO_ROOT}/.buildkite for all `.yml` files.
+    YAML_SEARCH_PATH="${1:-${REPO_ROOT}/.buildkite/**/*.yml}"
+
+    vecho "Searching for '.yml' files with the pattern '${YAML_SEARCH_PATH}'"
+    readarray -d '' YAML_PATHS < <(collect_glob_pattern "${YAML_SEARCH_PATH}")
+    
+    if [[ "${#YAML_PATHS[@]}" -lt 1 ]]; then
+        die "Unable to find any .yml files in the given pattern '${YAML_SEARCH_PATH}'!"
+    fi
+
+    vecho "  -> Found ${#YAML_PATHS[@]} .yml files"
+}
+
+
+##############################################################################
 ##############                random utilities                  ##############
 ##############################################################################
 
 # Print file size, in kilobytes
 function filesize() {
     du -k "${1}" | cut -f1
+}
+
+# Read a secret value from stdin, printing `*`'s to stdout as we go
+function read_secret() {
+    if [[ "${1}" == "-p" ]]; then
+        # Display the prompt to the user
+        echo -n "${2}"
+        shift; shift;
+    fi
+
+    # Turn off `echo` for this TTY, but be sure it comes back on
+    stty -echo
+    trap "stty echo" EXIT ERR
+
+    local _INTERNAL_SECRET_VALUE=""
+    while IFS= read -N1 c; do
+        # I don't know of a cheaper way to find newlines
+        hex="$(echo -n "${c}" | xxd -pu)"
+        if [[ "${hex}" == "0a" ]] || [[ "${hex}" == "0d" ]]; then
+            break
+        fi
+
+        # Append to `_INTERNAL_SECRET_VALUE`
+        _INTERNAL_SECRET_VALUE="${_INTERNAL_SECRET_VALUE}${c}"
+
+        # Print out to the user
+        echo -n "*"
+    done
+    echo
+
+    # Turn `echo` on on our TTY again
+    stty echo
+    trap - EXIT ERR
+
+    # Return value to the user
+    eval "${1}=\"${_INTERNAL_SECRET_VALUE}\""
 }
 
 function collect_buildkite_array() {
@@ -301,82 +493,29 @@ function collect_buildkite_array() {
 
 function receive_keys() {
     # If we think we are authorized, let's check to make sure that our secret keys are actually valid
-    PRIVATE_KEY_PATH=$(mktemp)
-    base64dec <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PRIVATE_KEY_SECRET}" >"${PRIVATE_KEY_PATH}"
-    if ! is_rsa_private_key "${PRIVATE_KEY_PATH}"; then
+    AGENT_PRIVATE_KEY_PATH=$(mktemp)
+    base64dec <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PRIVATE_KEY_SECRET}" >"${AGENT_PRIVATE_KEY_PATH}"
+    if ! is_rsa_private_key "${AGENT_PRIVATE_KEY_PATH}"; then
         die "Invalid RSA private key passed from agent environment hook!"
     fi
 
-    PUBLIC_KEY_PATH=$(mktemp)
-    base64dec <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PUBLIC_KEY_SECRET}" >"${PUBLIC_KEY_PATH}"
-    if ! is_rsa_public_key "${PUBLIC_KEY_PATH}"; then
+    AGENT_PUBLIC_KEY_PATH=$(mktemp)
+    base64dec <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PUBLIC_KEY_SECRET}" >"${AGENT_PUBLIC_KEY_PATH}"
+    if ! is_rsa_public_key "${AGENT_PUBLIC_KEY_PATH}"; then
         die "Invalid RSA public key passed from agent environment hook!"
     fi
 
     # Search for repository key based off of the private key fingerprint
-    RSA_FINGERPRINT=$(rsa_fingerprint "${PRIVATE_KEY_PATH}")
+    RSA_FINGERPRINT=$(rsa_fingerprint "${AGENT_PRIVATE_KEY_PATH}")
     REPO_KEY_PATH=".buildkite/cryptic_repo_keys/repo_key.${RSA_FINGERPRINT:0:8}"
     if [[ ! -f "${REPO_KEY_PATH}" ]]; then
         die "Cannot find expected repo key at '${REPO_KEY_PATH}'!  Ensure you have added the repository key to ${BUILDKITE_REPO}"
     fi
     UNENCRYPTED_REPO_KEY_PATH=$(mktemp)
-    decrypt_rsa "${PRIVATE_KEY_PATH}" < "${REPO_KEY_PATH}" > "${UNENCRYPTED_REPO_KEY_PATH}"
+    decrypt_rsa "${AGENT_PRIVATE_KEY_PATH}" < "${REPO_KEY_PATH}" > "${UNENCRYPTED_REPO_KEY_PATH}"
 }
 
 function cleanup_keys() {
-    shred -u "${PRIVATE_KEY_PATH}" "${PUBLIC_KEY_PATH}" "${UNENCRYPTED_REPO_KEY_PATH}"
-    unset PRIVATE_KEY_PATH PUBLIC_KEY_PATH UNENCRYPTED_REPO_KEY_PATH RSA_FINGERPRINT
-}
-
-
-function find_private_key() {
-    # Accept command-line arguments if they're given
-    if [[ -n "${1}" ]]; then
-        PRIVATE_KEY_PATH="${1}"
-    else
-        read -p 'Private keyfile location: ' PRIVATE_KEY_PATH
-    fi
-
-    # Double-check this is a valid private key
-    if ! is_rsa_private_key "${PRIVATE_KEY_PATH}"; then
-        die "Not a valid RSA private key: '${PRIVATE_KEY_PATH}'"
-    fi
-}
-
-function find_public_key() {
-    # Accept command-line arguments if they're given
-    if [[ -n "${1}" ]]; then
-        PUBLIC_KEY_PATH="${1}"
-    else
-        read -p 'Public keyfile location: ' PUBLIC_KEY_PATH
-    fi
-
-    # Double-check this is a valid public key
-    if ! is_rsa_public_key "${PUBLIC_KEY_PATH}"; then
-        die "Not a valid RSA public key: '${PUBLIC_KEY_PATH}'"
-    fi
-}
-
-function find_repository_root() {
-    # Accept command-line arguments if they're given
-    if [[ -n "${1}" ]]; then
-        REPO_ROOT="${1}"
-    else
-        # If the user is running this from within a repository that is not `cryptic-buildkite-plugin`, then use it!
-        REPO_ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
-        if [[ -n ${REPO_ORIGIN_URL} ]] && [[ "${REPO_ORIGIN_URL}" != *cryptic-buildkite-plugin* ]]; then
-            REPO_ROOT="$(git rev-parse --show-toplevel)"
-            echo "Autodetected repository with origin '${REPO_ORIGIN_URL}'"
-        else
-            read -p 'Repository location: ' REPO_ROOT
-        fi
-    fi
-}
-
-function find_repo_key() {
-    RSA_FINGERPRINT=$(rsa_fingerprint "${PRIVATE_KEY_PATH}")
-    REPO_KEY_PATH="${REPO_ROOT}/.buildkite/cryptic_repo_keys/repo_key.${RSA_FINGERPRINT:0:8}"
-    if [[ ! -f "${REPO_KEY_PATH}" ]]; then
-        die "repository keyfile ${REPO_KEY_PATH} does not exist!"
-    fi
+    shred -u "${AGENT_PRIVATE_KEY_PATH}" "${AGENT_PUBLIC_KEY_PATH}" "${UNENCRYPTED_REPO_KEY_PATH}"
+    unset AGENT_PRIVATE_KEY_PATH AGENT_PUBLIC_KEY_PATH UNENCRYPTED_REPO_KEY_PATH RSA_FINGERPRINT
 }

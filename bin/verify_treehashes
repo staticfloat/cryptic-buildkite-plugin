@@ -4,55 +4,43 @@
 
 # Load common tools
 CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/argparse.sh"
 source "${CRYPTIC_REPO}/lib/common.sh"
-
-# Get the RSA private keyfile path, so that we can decrypt the repo key
-find_private_key "${1:-}"
+source "${CRYPTIC_REPO}/lib/yaml_extraction_prologue.sh"
 
 # Get the repository root
-find_repository_root "${2:-}"
+find_repository_root
 
 # Look for the repo key
 find_repo_key
 
-# This loads in YAML extraction prologues
-source "${CRYPTIC_REPO}/lib/yaml_extraction_prologue.sh"
+# Get paths to our yml files
+find_yaml_paths "${1:-}"
 
-# We need the public key, not the private key.  But since we're lazy and don't want to change
-# the parsing rules, we'll just re-generate the public key from the private one here.
-PUBLIC_KEY_PATH=$(mktemp)
-openssl rsa -in "${PRIVATE_KEY_PATH}" -pubout -out "${PUBLIC_KEY_PATH}" 2>/dev/null
+for YAML_PATH in ${YAML_PATHS[@]}; do
+    # Extract treehash glob patterns from the YAML
+    readarray -t PIPELINE_TREEHASH_TRIPLETS < <(extract_pipeline_treehashes "${YAML_PATH}")
 
-# Extract treehash glob patterns from the YAML
-readarray -t PIPELINE_TREEHASH_TRIPLETS < <(extract_pipeline_treehashes "${YAML_PATH}")
+    vecho "Parsed out ${#PIPELINE_TREEHASH_TRIPLETS[@]} pipelines being launched."
 
-# Start printing out the helpful debugging messages
-cat <<-EOD
-    Parsed out ${#PIPELINE_TREEHASH_TRIPLETS[@]} pipelines being launched.
-    Verifying signatures...
+    # Decrypt encrypted variables
+    SHOULD_FAIL="false"
+    for TRIPLET in "${PIPELINE_TREEHASH_TRIPLETS[@]}"; do
+        PIPELINE_PATH="$(cut -d'&' -f1 <<<"${TRIPLET}" | tr -d '"')"
+        PIPELINE_TREEHASH="$(cut -d'&' -f2 <<<"${TRIPLET}" | tr -d '"')"
+        PIPELINE_ENCRYPTED_TREEHASH="$(cut -d'&' -f3 <<<"${TRIPLET}" | tr -d '"')"
+        PIPELINE_TREEHASH_FILESOURCE="$(cut -d'&' -f4 <<<"${TRIPLET}" | tr -d '"')"
 
-EOD
-
-# Decrypt encrypted variables
-SHOULD_FAIL="false"
-for TRIPLET in "${PIPELINE_TREEHASH_TRIPLETS[@]}"; do
-    PIPELINE_PATH="$(cut -d'&' -f1 <<<"${TRIPLET}" | tr -d '"')"
-    PIPELINE_TREEHASH="$(cut -d'&' -f2 <<<"${TRIPLET}" | tr -d '"')"
-    PIPELINE_ENCRYPTED_TREEHASH="$(cut -d'&' -f3 <<<"${TRIPLET}" | tr -d '"')"
-    PIPELINE_TREEHASH_FILESOURCE="$(cut -d'&' -f4 <<<"${TRIPLET}" | tr -d '"')"
-
-    # Write embedded encrypted treehash out to file
-    PIPELINE_DECRYPTED_TREEHASH="$(base64dec <<<"${PIPELINE_ENCRYPTED_TREEHASH}" | decrypt_aes_key_then_decrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}")"
-    if [[ "${PIPELINE_DECRYPTED_TREEHASH}" == "${PIPELINE_TREEHASH}" ]]; then
-        echo "        ${PIPELINE_PATH}: ✔️"
-    else
-        echo "        ${PIPELINE_PATH}: ❌"
-        SHOULD_FAIL="true"
-    fi
+        # Write embedded encrypted treehash out to file
+        PIPELINE_DECRYPTED_TREEHASH="$(base64dec <<<"${PIPELINE_ENCRYPTED_TREEHASH}" | decrypt_aes "${REPO_KEY_PATH}")"
+        if [[ "${PIPELINE_DECRYPTED_TREEHASH}" == "${PIPELINE_TREEHASH}" ]]; then
+            echo "[${YAML_PATH}] -> ${PIPELINE_PATH}: ✔️"
+        else
+            echo "[${YAML_PATH}] -> ${PIPELINE_PATH}: ❌"
+            SHOULD_FAIL="true"
+        fi
+    done
 done
-
-# Clean up some temporary files
-rm -f "${PUBLIC_KEY_PATH}"
 
 if [[ ${SHOULD_FAIL} != "false" ]]; then
     exit 1

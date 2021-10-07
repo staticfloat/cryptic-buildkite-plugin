@@ -2,6 +2,8 @@
 steps:
   # In the WebUI, the `cryptic` launch job _must_ be the first job to run
   - label: ":rocket: launch pipelines"
+    env:
+      CRYPTIC_ADHOC_SECRET_SSH_KEY: "FPyxl8XnP4Ye8J1DExyytA3ZM68ff13+wPPtLiSktSHru0uO0oZYNeFhOBi+lT/Wig48iidYaKh+vBzzqBkOp+x5PP8FYqKJaD6Nj+tkIc1kOe94M0Yhn7Ao22+lu6hA5EUC5+0071DXLWkTB9Cmxbzl08KxapHjluUOuPFBnWokzFa2PAiAw0GuS4TXuwWNxfJpMl59W2IUPjLqO6tegZzg7yFhBcG8zKvnD1tVuYPQqA4aYvnQkwblxQDeJ5LMHXSDgpk1LRLJvhq5kbbMFZ42kb/emsFR7uU6Z3tmUVYPF4fCvDbvZHa2e/81P0ZHKWvQe1cSsx9x8AEWxzlT6g==;U2FsdGVkX1+KynLJPlxV7qdZ6KC5MCl55+N+gpnCbkRSJqJJRWwKz550fyI1PB6/"
     plugins:
       - staticfloat/cryptic:
           # Our list of pipelines that should be launched (but don't require a signature)

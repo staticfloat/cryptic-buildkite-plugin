@@ -4,53 +4,44 @@
 
 # Load common tools
 CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/argparse.sh"
 source "${CRYPTIC_REPO}/lib/common.sh"
-
-# Get the RSA private keyfile path, so that we can decrypt the repo key
-find_private_key "${1:-}"
+source "${CRYPTIC_REPO}/lib/yaml_extraction_prologue.sh"
 
 # Get the repository root
-find_repository_root "${2:-}"
+find_repository_root
 
 # Look for the repo key
 find_repo_key
 
-# This loads in YAML extraction prologues
-source "${CRYPTIC_REPO}/lib/yaml_extraction_prologue.sh"
+# Get paths to our yml files
+find_yaml_paths "${1:-}"
 
+for YAML_PATH in ${YAML_PATHS[@]}; do
+    # Extract treehash glob patterns from the YAML
+    readarray -t PIPELINE_TREEHASH_TRIPLETS < <(extract_pipeline_treehashes "${YAML_PATH}")
 
-# Extract treehash glob patterns from the YAML
-readarray -t PIPELINE_TREEHASH_TRIPLETS < <(extract_pipeline_treehashes "${YAML_PATH}")
+    # Output helpful messages to the user
+    vecho "Parsed out ${#PIPELINE_TREEHASH_TRIPLETS[@]} pipelines being launched."
 
-# Output helpful messages to the user
-cat <<-EOD
-    Parsed out ${#PIPELINE_TREEHASH_TRIPLETS[@]} pipelines being launched.
-    Printing out exemplar plugin stanzas:
+    for TRIPLET in "${PIPELINE_TREEHASH_TRIPLETS[@]}"; do
+        PIPELINE_PATH="$(cut -d'&' -f1 <<<"${TRIPLET}" | tr -d '"')"
+        PIPELINE_TREEHASH="$(cut -d'&' -f2 <<<"${TRIPLET}" | tr -d '"')"
+        # We don't extract any pre-existing PIPELINE_ENCRYPTED_TREEHASH values
+        PIPELINE_TREEHASH_FILESOURCE="$(cut -d'&' -f4 <<<"${TRIPLET}" | tr -d '"')"
 
-EOD
-
-# Decrypt encrypted variables
-for TRIPLET in "${PIPELINE_TREEHASH_TRIPLETS[@]}"; do
-    PIPELINE_PATH="$(cut -d'&' -f1 <<<"${TRIPLET}" | tr -d '"')"
-    PIPELINE_TREEHASH="$(cut -d'&' -f2 <<<"${TRIPLET}" | tr -d '"')"
-    # We don't extract any pre-existing PIPELINE_ENCRYPTED_TREEHASH values
-    PIPELINE_TREEHASH_FILESOURCE="$(cut -d'&' -f4 <<<"${TRIPLET}" | tr -d '"')"
-
-    PIPELINE_ENCRYPTED_TREEHASH="$(decrypt_aes_key_then_encrypt "${PRIVATE_KEY_PATH}" "${REPO_KEY_PATH}" <<<"${PIPELINE_TREEHASH}" | base64enc)"
-    if [[ -f "${REPO_ROOT}/${PIPELINE_TREEHASH_FILESOURCE}" ]]; then
-        base64dec <<<"${PIPELINE_ENCRYPTED_TREEHASH}" >"${REPO_ROOT}/${PIPELINE_TREEHASH_FILESOURCE}"
-        cat <<-EOD
-            - pipeline: ${PIPELINE_PATH}
-              signature_file: ${PIPELINE_TREEHASH_FILESOURCE}
-              ...
+        PIPELINE_ENCRYPTED_TREEHASH="$(encrypt_aes "${REPO_KEY_PATH}" <<<"${PIPELINE_TREEHASH}" | base64enc)"
+        if [[ -f "${REPO_ROOT}/${PIPELINE_TREEHASH_FILESOURCE}" ]]; then
+            base64dec <<<"${PIPELINE_ENCRYPTED_TREEHASH}" >"${REPO_ROOT}/${PIPELINE_TREEHASH_FILESOURCE}"
+            echo "signature_file '${PIPELINE_TREEHASH_FILESOURCE}' updated"
+        else
+            echo "Put this pipeline launch into '${YAML_PATH}':"
+            cat <<-EOD
+                - pipeline: ${PIPELINE_PATH}
+                  signature: ${PIPELINE_ENCRYPTED_TREEHASH}
+                  ...
 
 EOD
-    else
-        cat <<-EOD
-            - pipeline: ${PIPELINE_PATH}
-              signature: ${PIPELINE_ENCRYPTED_TREEHASH}
-              ...
-
-EOD
-    fi
+        fi
+    done
 done

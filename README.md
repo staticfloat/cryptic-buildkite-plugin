@@ -27,6 +27,13 @@ The first two capabilities are quite straightforward; once your repository is se
 ```yml
 steps:
   - label: "Showcase secrets decrypting"
+    # Note, if this is a child pipeline launched by the webUI config, you MUST receive this
+    # value from the parent pipeline in order to decrypt secrets.  Further note, do NOT list
+    # this environment variable as a top-level key within ANY `.yaml` file, as this will
+    # cause the value to be appended to all future pipelines!
+    env:
+      BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET: ${BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET?}
+    plugins:
     - staticfloat/cryptic:
         files:
             # This file is actually only stored as `secret_message.txt.encrypted` in the repo,
@@ -44,11 +51,6 @@ steps:
         echo "To prove that we decrypted 'AWS_CREDENTIALS', here it is: $${AWS_CREDENTIALS}"
         echo "To prove that we decrypted secret_message.txt, here it is:"
         cat ./.buildkite/secrets/secret_message.txt
-
-# Note, if this is a child pipeline launched by the webUI config, you MUST put this here to
-# inherit privileges from the parent pipeline.
-env:
-  BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET: ${BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET?}
 ```
 
 The `cryptic` plugin will decrypt the files and variables, allowing the rest of your pipeline to use the pieces of sensitive data without knowing they were ever encrypted at all.
@@ -111,6 +113,7 @@ Repository setup:
       - Repositories can have the same repository key encrypted with multiple agent keys, to support multiple agent pools each with a different subset of allowed repository secret access.
   2. Encrypt secret files/variables using `bin/encrypt_{file,variable}`, and add the relevant plugin stanzas to your pipeline.
       - To ensure things are working correctly, you can use `bin/decrypt` to test out how things will be decoded.
+      - Note that another command, `bin/encrypt_adhoc` exists, but it is only recommended to be used with secrets that must be decrypted before the repository has been cloned, e.g. SSH keys.
   3. To propagate trust to a child pipeline, use the `signed_pipelines` parameter
       - To ensure a malicious contributor cannot run `echo ${SECRET_KEY}` as part of the privileged build, add all scripts invoked during the build to the `inputs` sub-parameter, then use `bin/sign_treehashes` to get an encrypted treehash that will be checked before the pipeline is launched.
       - If you have a complicated chain of trust (A -> B -> C) it can be tedious to regenerate signatures for all links in the chain simply because there was a change made in C.  For this usecase, you can use `signature_file` instead of `signature`, to decouple the signature from the `.yml` file itself, meaning that `B`'s hash doesn't change just because `C`'s did.

@@ -32,20 +32,20 @@ function base64enc() {
 }
 
 # Set this to wherever your private key lives
-PRIVATE_KEY_PATH="${SECRETS_MOUNT_POINT}/agent.key"
-PUBLIC_KEY_PATH="${SECRETS_MOUNT_POINT}/agent.pub"
-if [[ ! -f "${PRIVATE_KEY_PATH}" ]]; then
-    die "Unable to open agent private key path '${PRIVATE_KEY_PATH}'!  Make sure your agent has this file deployed within it!"
+AGENT_PRIVATE_KEY_PATH="${SECRETS_MOUNT_POINT}/agent.key"
+AGENT_PUBLIC_KEY_PATH="${SECRETS_MOUNT_POINT}/agent.pub"
+if [[ ! -f "${AGENT_PRIVATE_KEY_PATH}" ]]; then
+    die "Unable to open agent private key path '${AGENT_PRIVATE_KEY_PATH}'!  Make sure your agent has this file deployed within it!"
 else
-    if ! openssl rsa -inform PEM -in "${PRIVATE_KEY_PATH}" -noout 2>/dev/null; then
-        die "Secret private key path '${PRIVATE_KEY_PATH}' is not a valid private RSA key!"
+    if ! openssl rsa -inform PEM -in "${AGENT_PRIVATE_KEY_PATH}" -noout 2>/dev/null; then
+        die "Secret private key path '${AGENT_PRIVATE_KEY_PATH}' is not a valid private RSA key!"
     fi
 fi
-if [[ ! -f "${PUBLIC_KEY_PATH}" ]]; then
-    die "Unable to open agent public key path '${PUBLIC_KEY_PATH}'!  Make sure your agent has this file deployed within it!"
+if [[ ! -f "${AGENT_PUBLIC_KEY_PATH}" ]]; then
+    die "Unable to open agent public key path '${AGENT_PUBLIC_KEY_PATH}'!  Make sure your agent has this file deployed within it!"
 else
-    if ! openssl rsa -inform PEM -pubin -in "${PUBLIC_KEY_PATH}" -noout 2>/dev/null; then
-        die "Secret public key path '${PUBLIC_KEY_PATH}' is not a valid public RSA key!"
+    if ! openssl rsa -inform PEM -pubin -in "${AGENT_PUBLIC_KEY_PATH}" -noout 2>/dev/null; then
+        die "Secret public key path '${AGENT_PUBLIC_KEY_PATH}' is not a valid public RSA key!"
     fi
 fi
 
@@ -73,8 +73,8 @@ fi
 function set_cryptic_privileged() {
     # The first thing we do is export a base64-encoded form of the keys for later consumption by the cryptic plugin
     echo "Privileged build detected; unlocking private key"
-    export BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PRIVATE_KEY_SECRET="$(base64enc < "${PRIVATE_KEY_PATH}")"
-    export BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PUBLIC_KEY_SECRET="$(base64enc < "${PUBLIC_KEY_PATH}")"
+    export BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PRIVATE_KEY_SECRET="$(base64enc < "${AGENT_PRIVATE_KEY_PATH}")"
+    export BUILDKITE_PLUGIN_CRYPTIC_BASE64_AGENT_PUBLIC_KEY_SECRET="$(base64enc < "${AGENT_PUBLIC_KEY_PATH}")"
     export BUILDKITE_PLUGIN_CRYPTIC_PRIVILEGED=true
 
     # The next thing we do is search for `CRYPTIC_ADHOC_SECRET_*` variables and decrypt them.
@@ -92,7 +92,7 @@ function set_cryptic_privileged() {
         readarray -d';' -t ADHOC_PAIR <<<"${!LONG_ADHOC_NAME}"
         
         # Take the key, decrypt it with our RSA private key
-        base64dec <<<"${ADHOC_PAIR[0]}" | openssl rsautl -decrypt -inkey "${PRIVATE_KEY_PATH}" > "${TEMP_KEYFILE}"
+        base64dec <<<"${ADHOC_PAIR[0]}" | openssl rsautl -decrypt -inkey "${AGENT_PRIVATE_KEY_PATH}" > "${TEMP_KEYFILE}"
 
         # Make sure the AES key is the right length
         if [[ $(wc -c <"${TEMP_KEYFILE}") != "128" ]]; then
@@ -125,7 +125,7 @@ elif [[ -v "BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET" ]]; then
     openssl base64 -d -A <<<"${BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET}" > "${SIGNATURE_FILE}"
 
     # Verify that the signature is valid; if it is, then unlock the keys!
-    if openssl dgst -sha256 -verify "${PUBLIC_KEY_PATH}" -signature "${SIGNATURE_FILE}" <<<"${BUILDKITE_INITIAL_JOB_ID}"; then
+    if openssl dgst -sha256 -verify "${AGENT_PUBLIC_KEY_PATH}" -signature "${SIGNATURE_FILE}" <<<"${BUILDKITE_INITIAL_JOB_ID}"; then
         set_cryptic_privileged
     fi
 
@@ -143,4 +143,4 @@ if ! umount "${SECRETS_MOUNT_POINT}" 2>/dev/null; then
 fi
 
 # don't pollute the global namespace
-unset SECRETS_MOUNT_POINT BUILDKITE_TOKEN_PATH BUILDKITE_TOKEN PRIVATE_KEY_PATH ADHOC_PAIR
+unset SECRETS_MOUNT_POINT BUILDKITE_TOKEN_PATH BUILDKITE_TOKEN AGENT_PRIVATE_KEY_PATH ADHOC_PAIR

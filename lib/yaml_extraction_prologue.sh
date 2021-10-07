@@ -5,19 +5,6 @@ if ! which shyaml >/dev/null 2>/dev/null; then
     die "We require shyaml to be installed for YAML parsing"
 fi
 
-# Get the `.yaml` file
-if [[ "$#" -ge 3 ]]; then
-    YAML_PATH="${3}"
-else
-    read -p 'pipeline.yaml file: ' YAML_PATH
-fi
-
-# YAML_PATH can be either a REPO_ROOT-relative path, or an absolute path
-if [[ "${YAML_PATH}" != "${REPO_ROOT}"* ]] && [[ "${YAML_PATH}" == /* ]]; then
-    die "File path must be either a repo-relative path, or an absolute path within the repo root"
-fi
-YAML_PATH="${YAML_PATH#${REPO_ROOT}/}"
-
 
 # Extract the `variables:` section of a cryptic `pipeline.yml` plugin section
 function extract_encrypted_variables() {
@@ -49,10 +36,10 @@ function extract_adhoc_encrypted_variables() {
     # Iterate over the steps in the yaml file
     (shyaml get-values-0 steps <"${1}" || true) |
     while IFS='' read -r -d '' STEP; do
-        (shyaml keys-0 env <"${1}" || true) |
+        (shyaml keys-0 env <<<"${STEP}" 2>/dev/null || true) |
         while IFS='' read -r -d '' VARNAME; do
             if [[ "${VARNAME}" == CRYPTIC_ADHOC_SECRET_* ]]; then
-                printf "%s\n" "${VARNAME:21}=$(shyaml get-value env.${VARNAME} <"${1}")"
+                printf "%s\n" "${VARNAME:21}=$(shyaml get-value env.${VARNAME} <<<"${STEP}")"
             fi
         done
     done
@@ -89,6 +76,8 @@ function extract_encrypted_files() {
 function extract_pipeline_treehashes() {
     # Most of our paths are relative to the root directory, so this is just easier
     pushd "${REPO_ROOT}" >/dev/null
+
+    vecho "Extracting treehashes from '${YAML_PATH}'"
 
     # Iterate over the steps in the yaml file
     (shyaml get-values-0 steps <"${1}" || true) |
