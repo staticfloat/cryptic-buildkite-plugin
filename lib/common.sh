@@ -316,7 +316,7 @@ function find_private_key() {
         if [[ ! -f "${DEFAULT_AGENT_PRIVATE_KEY_PATH}" ]]; then
             # If we don't already have an agent private key cached in our `cryptic_repo_keys`
             # ask for it from the user, then symlink it into our cached location
-            read -p 'Private keyfile location: ' AGENT_PRIVATE_KEY_PATH
+            read -e -p 'Private keyfile location: ' AGENT_PRIVATE_KEY_PATH
         else
             AGENT_PRIVATE_KEY_PATH="${DEFAULT_AGENT_PRIVATE_KEY_PATH}"
         fi
@@ -350,7 +350,7 @@ function find_public_key() {
         if [[ ! -f "${DEFAULT_AGENT_PUBLIC_KEY_PATH}" ]]; then
             # If we don't already have an agent public key cached in our `cryptic_repo_keys`
             # ask for it from the user, then symlink it into our cached location
-            read -p 'Public keyfile location: ' AGENT_PUBLIC_KEY_PATH
+            read -e -p 'Public keyfile location: ' AGENT_PUBLIC_KEY_PATH
         else
             AGENT_PUBLIC_KEY_PATH="${DEFAULT_AGENT_PUBLIC_KEY_PATH}"
         fi
@@ -378,7 +378,7 @@ function find_repository_root() {
             echo "Autodetected repository with origin '${REPO_ORIGIN_URL}'"
         else
             # Otherwise, just ask the user
-            read -p 'Repository location: ' REPO_ROOT
+            read -e -p 'Repository location: ' REPO_ROOT
         fi
     fi
 
