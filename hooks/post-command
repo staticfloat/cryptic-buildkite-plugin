@@ -96,7 +96,7 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
                 # Insert a block step as the first step in this pipeline
                 sed -e "s&^steps:\(.*\)&steps:\\1\n  - block: \"Bypass failed signature check for '${PIPELINE_PATH}'?\"\n    blocked_state: \"running\"\n    key: \"${BLOCK_KEY}\"&" |
                 # Each other step in the secure pipeline _must_ have a `depends_on`, which we then add to:
-                sed -e "s&^    depends_on:&    depends_on:\n     - \"${BLOCK_KEY}\"\n&" > "${PIPELINE_PATH}.block"
+                sed -e "s&^    depends_on:&    depends_on:\n      - \"${BLOCK_KEY}\"\n&" > "${PIPELINE_PATH}.block"
             echo "Printing out altered pipeline:"
             cat "${PIPELINE_PATH}.block"
             PIPELINE_PATH="${PIPELINE_PATH}.block"
