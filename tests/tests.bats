@@ -115,7 +115,7 @@ function create_test_repo() {
 
     # Trying to encrypt a nonexistent file fails
     run encrypt_file --repo-root="${dir}/repo" "${dir}/repo/src/blah.jl" </dev/null
-    assert_output --partial "No such file or directory"
+    assert_output --partial "File path '${dir}/repo/src/blah.jl' not found!"
     assert_failure
 
     rm -rf "${dir}"

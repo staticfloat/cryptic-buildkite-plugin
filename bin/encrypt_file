@@ -21,10 +21,17 @@ else
     read -e -p 'File to encrypt: ' FILE_PATH
 fi
 
-# FILE_PATH can be either a REPO_ROOT-relative path, or an absolute path
-if [[ "${FILE_PATH}" != "${REPO_ROOT}"* ]] && [[ "${FILE_PATH}" == /* ]]; then
-    die "File path must be either a repo-relative path, or an absolute path within the repo root"
+# If this is a reachable file, use that
+if [[ -f "${FILE_PATH}" ]]; then
+    FILE_PATH="$(realpath "${FILE_PATH}")"
+# If this was not reachable, but it's a repo-relative path, use that
+elif [[ -f "${REPO_ROOT}/${FILE_PATH}" ]]; then
+    FILE_PATH="$(realpath "${REPO_ROOT}/${FILE_PATH}")"
+else
+    die "File path '${FILE_PATH}' not found!"
 fi
+
+# Extract the repo-relative location
 FILE_PATH="${FILE_PATH#${REPO_ROOT}/}"
 
 # Check to make sure there's not already a `.encrypted` file:
