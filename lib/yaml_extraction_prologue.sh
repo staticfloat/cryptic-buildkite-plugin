@@ -33,6 +33,14 @@ function extract_encrypted_variables() {
 
 # Extract all variables that match "CRYPTIC_ADHOC_SECRET_*"
 function extract_adhoc_encrypted_variables() {
+    # Iterate over any global env mappings
+    (shyaml keys-0 env <"${1}" 2>/dev/null || true) |
+    while IFS='' read -r -d '' VARNAME; do
+        if [[ "${VARNAME}" == CRYPTIC_ADHOC_SECRET_* ]]; then
+            printf "%s\n" "${VARNAME:21}=$(shyaml get-value env.${VARNAME} <"${1}")"
+        fi
+    done
+
     # Iterate over the steps in the yaml file
     (shyaml get-values-0 steps <"${1}" || true) |
     while IFS='' read -r -d '' STEP; do
