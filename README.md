@@ -89,11 +89,13 @@ steps:
               inputs:
                 - .buildkite/utils/*.sh
               allow_hash_override: true
+    command: "true"
 ```
 
 In this example, we launch one secure pipeline which will have access to the agent keys to decrypt secrets, but the unsigned pipeline will not, even if a user attempts to add a `cryptic` plugin.
 Since the WebUI starts "privileged", with access to the agent keys, using the `signed_pipelines` is one way to pass the keys on to a child pipeline while simultaneously ensuring that the pipeline (and any other files listed in the `inputs` array) are unchanged since the last time the signature was added.
 The `allow_hash_override` option enables a committer to bypass a failing signature check and force the pipeline to continue running with access to the secrets.
+Note that, as all steps require a `command`/`commands` mapping, we provide one to simply execute the `true` binary.
 
 ## Setting up new agents and repositories for `cryptic`
 
