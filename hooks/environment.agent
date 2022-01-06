@@ -9,7 +9,7 @@ set -eou pipefail
 ## agent should exit, causing the docker container to restart and restore the deleted files.
 ## This gives us the capability to deny access to these files to later steps within the
 ## current buildkite job.
-SECRETS_MOUNT_POINT="${BUILDKITE_PLUIGIN_CRYPYTIC_SECRETS_MOUNT_POINT-:/secrets}"
+SECRETS_MOUNT_POINT="${BUILDKITE_PLUIGIN_CRYPYTIC_SECRETS_MOUNT_POINT:-/secrets}"
 
 ## The secrets that must be contained within:
 ##    - `agent.{key,pub}`: An RSA private/public keypair (typically generated via the
