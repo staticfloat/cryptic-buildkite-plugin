@@ -65,6 +65,22 @@ else
     die "No sha256sum/shasum available!"
 fi
 
+# Figure out the best way to securely delete something
+if [[ -n "$(which shred 2>/dev/null)" ]]; then
+    function secure_delete() {
+        shred -u "$*"
+    }
+elif [[ "$(uname)" == "Darwin" ]] || [[ "$(uname)" == *BSD ]]; then
+    function secure_delete() {
+        rm -fP "$*"
+    }
+else
+    # Suboptimal, but what you gonna do?
+    function secure_delete() {
+        rm -f "$*"
+    }
+fi
+
 # Because it's so common to want to use `~/` in expanded paths,
 # manually expand that to `$HOME` here. Gratefully adapted from
 # https://stackoverflow.com/a/27485157/230778
@@ -163,7 +179,7 @@ function decrypt_aes_key_then_encrypt() {
     encrypt_aes "${TEMP_KEYFILE}"
 
     # Clean up our keyfile and our trap
-    shred -u "${TEMP_KEYFILE}"
+    secure_delete "${TEMP_KEYFILE}"
     trap - EXIT
 }
 
@@ -180,7 +196,7 @@ function decrypt_aes_key_then_decrypt() {
     decrypt_aes "${TEMP_KEYFILE}"
 
     # Clean up our keyfile and our trap
-    shred -u "${TEMP_KEYFILE}"
+    secure_delete "${TEMP_KEYFILE}"
     trap - EXIT
 }
 
@@ -218,7 +234,7 @@ function encrypt_adhoc_value() {
     encrypt_aes "${TEMP_KEYFILE}" <<<"${2}" | base64enc
 
     # Clean up our keyfile and our trap
-    shred -u "${TEMP_KEYFILE}"
+    secure_delete "${TEMP_KEYFILE}"
     trap - EXIT
 }
 
@@ -243,7 +259,7 @@ function decrypt_adhoc_value() {
     base64dec <<<"${ADHOC_PAIR[1]}" | decrypt_aes "${TEMP_KEYFILE}"
 
     # Clean up our keyfile and our trap
-    shred -u "${TEMP_KEYFILE}"
+    secure_delete "${TEMP_KEYFILE}"
     trap - EXIT
 }
 
@@ -535,6 +551,6 @@ function receive_keys() {
 }
 
 function cleanup_keys() {
-    shred -u "${AGENT_PRIVATE_KEY_PATH}" "${AGENT_PUBLIC_KEY_PATH}" "${UNENCRYPTED_REPO_KEY_PATH}"
+    secure_delete "${AGENT_PRIVATE_KEY_PATH}" "${AGENT_PUBLIC_KEY_PATH}" "${UNENCRYPTED_REPO_KEY_PATH}"
     unset AGENT_PRIVATE_KEY_PATH AGENT_PUBLIC_KEY_PATH UNENCRYPTED_REPO_KEY_PATH RSA_FINGERPRINT
 }
