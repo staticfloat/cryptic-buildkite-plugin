@@ -43,7 +43,17 @@ function vcat() {
 if [[ -z "$(which openssl 2>/dev/null)" ]]; then
     die "'openssl' tool required!"
 elif [[ "$(openssl version)" == "LibreSSL 2"* ]]; then
-    die "'openssl' tool outdated!  If you're on macOS, try 'brew install openssl', then add it to the PATH!"
+    # Homebrew doesn't like to link `openssl`, so let's manually pluck out a homebrew-installed `openssl`, if it exists
+    HOMEBREW_PREFIX="$(dirname $(dirname $(which brew 2>/dev/null)))"
+    for OPENSSL_DIR in ${HOMEBREW_PREFIX}/Cellar/openssl\@3/*; do
+        if [[ -f "${OPENSSL_DIR}/bin/openssl" ]]; then
+            echo " -> Homebrew OpenSSL installation found at ${OPENSSL_DIR}"
+            PATH="${OPENSSL_DIR}/bin:${PATH}"
+        fi
+    done
+    if [[ "$(openssl version)" == "LibreSSL 2"* ]]; then
+        die "'openssl' tool outdated!  If you're on macOS, try 'brew install openssl@3'."
+    fi
 fi
 
 # Figure out which shasum program to use
@@ -297,7 +307,7 @@ function calc_treehash() {
         done
     done
 
-    calc_shasum <<< ${DIR_HASHES[@]}
+    calc_shasum <<< "${DIR_HASHES[@]}"
 }
 
 
