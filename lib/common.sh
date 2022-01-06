@@ -297,7 +297,7 @@ function calc_treehash() {
         done
     done
 
-    calc_shasum <<< ${DIR_HASHES[@]}
+    calc_shasum <<< "${DIR_HASHES[@]}"
 }
 
 
