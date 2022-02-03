@@ -68,7 +68,11 @@ fi
 # Figure out the best way to securely delete something
 if [[ -n "$(which shred 2>/dev/null)" ]]; then
     function secure_delete() {
-        shred -u "$*"
+        for f in "$@"; do
+            if [[ -e "${f}" ]]; then
+                shred -u "${f}"
+            fi
+        done
     }
 elif [[ "$(uname)" == "Darwin" ]] || [[ "$(uname)" == *BSD ]]; then
     function secure_delete() {
