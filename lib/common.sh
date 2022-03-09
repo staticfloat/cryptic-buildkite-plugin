@@ -267,6 +267,17 @@ function decrypt_adhoc_value() {
     trap - EXIT
 }
 
+
+
+##############################################################################
+##############                  SSH utilities                   ##############
+##############################################################################
+
+function create_ssh_key() {
+    ssh-keygen -f "${1}" -t ecdsa -b 521 -q -C "" -N ""
+}
+
+
 ##############################################################################
 ##############                   treehashing                    ##############
 ##############################################################################
@@ -423,6 +434,14 @@ function find_repository_root() {
 
     # Trim trailing slashes, because they're ugly
     REPO_ROOT="${REPO_ROOT%%+(/)}"
+}
+
+function github_repo() {
+    if [[ "${REPO_ORIGIN_URL}" == *github* ]]; then
+        sed -e 's_^git@_https://_' -e 's_github.com:_github.com/_' -e 's_.git$__' <<< "${REPO_ORIGIN_URL}"
+    else
+        echo -n 'https://github.com/{USER}/{REPO}'
+    fi
 }
 
 function find_repo_key() {

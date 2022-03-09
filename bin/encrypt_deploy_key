@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+## Create a new SSH deploy key and encrypt it as an adhoc secret
+
+# Load common tools
+CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/argparse.sh"
+source "${CRYPTIC_REPO}/lib/common.sh"
+
+# Get the repository root
+find_repository_root
+
+# Get the RSA public keyfile path, so that we can create and encrypt a key/secret pair
+find_public_key
+
+# Create SSH key in temporary file
+SSH_KEY_DIR="$(mktemp -d)"
+create_ssh_key "${SSH_KEY_DIR}/key"
+trap "rm -rf ${SSH_KEY_DIR}" EXIT 
+
+# Encrypt the deploy key with agent's public key
+ENCRYPTED_SECRET_VALUE="$(encrypt_adhoc_value "${AGENT_PUBLIC_KEY_PATH}" "$(<${SSH_KEY_DIR}/key)")"
+
+cat <<-EOD
+
+    Congratulations, you have successfully created a new deploy key.  The public key fingerprint is:
+
+EOD
+cat "${SSH_KEY_DIR}/key.pub"
+cat <<-EOD
+
+    You must paste that fingerprint into the repository's deploy key interface:
+
+        $(github_repo)/settings/keys/new
+
+    You must also add the following 'env' key to all pipelines:
+
+        env:
+          CRYPTIC_ADHOC_SECRET_GITHUB_SSH_KEY: "${ENCRYPTED_SECRET_VALUE}"
+EOD
