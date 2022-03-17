@@ -426,6 +426,10 @@ function find_repository_root() {
 }
 
 function find_repo_key() {
+    if [[ -v "REPO_KEY_PATH" ]]; then
+        return
+    fi
+
     # First, check to see if we have a decrypted repo key:
     REPO_KEY_PATH="${REPO_ROOT}/.buildkite/cryptic_repo_keys/repo_key"
     if [[ -f "${REPO_KEY_PATH}" ]]; then
