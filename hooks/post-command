@@ -61,7 +61,7 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
     if [[ ! -v "${SIGNATURE_VAR}" ]] && [[ ! -v "${SIGNATURE_FILE_VAR}" ]]; then
         # Execute `die` in a subshell so that we can print out failure messages for each pipeline,
         # then fail out once at the end, ignoring the `exit` and failure that it creates.
-        (die "Locked pipeline '${PIPELINE_PATH}' must define either 'signature' or 'siganture_file'"; ) || true
+        (die "Locked pipeline '${PIPELINE_PATH}' must define either 'signature' or 'signature_file'"; ) || true
         SHOULD_FAIL=true
         continue
     fi
@@ -74,7 +74,7 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
         base64dec <<<"${!SIGNATURE_VAR}" >"${SIGNATURE_FILE}"
     fi
     if [[ "$(decrypt_aes "${UNENCRYPTED_REPO_KEY_PATH}" <"${SIGNATURE_FILE}")" != "${FULL_TREEHASH}" ]]; then
-        SIGNATURE_FAIL_MSG="Pipeline '${PIPELINE_PATH}' fails treehash siganture check!  You may need to re-run cryptic/bin/sign_treehashes!"
+        SIGNATURE_FAIL_MSG="Pipeline '${PIPELINE_PATH}' fails treehash signature check!  You may need to re-run cryptic/bin/sign_treehashes!"
         echo "${SIGNATURE_FAIL_MSG}" >&2
 
         HASH_OVERRIDE_VAR="BUILDKITE_PLUGIN_CRYPTIC_SIGNED_PIPELINES_${PIPELINE_IDX}_ALLOW_HASH_OVERRIDE"
