@@ -17,7 +17,8 @@ SECRETS_MOUNT_POINT="${BUILDKITE_PLUIGIN_CRYPYTIC_SECRETS_MOUNT_POINT:-/secrets}
 ##    - `buildkite-api-token`: A buildkite API token (with `read_builds` permission).
 
 ## The helper programs that must be available on the worker:
-##    - openssl v3+
+##    - openssl v3 (from Homebrew on macOS)
+##    - shred (Linux only)
 ##    - shyaml
 ##    - jq
 
@@ -95,17 +96,31 @@ if ! [[ "${BUILDKITE_TOKEN}" =~ ^[[:xdigit:]]{40}$ ]]; then
     die "Buildkite token stored at '${BUILDKITE_TOKEN_PATH}' is not a 40-length hexadecimal hash!"
 fi
 
+function is_uuid() {
+    [[ "${1}" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]]
+}
+
 # Helper function to get the first job ID from the currently-running build
 function get_initial_job_id() {
     local TOKEN_HEADER="Authorization: Bearer ${BUILDKITE_TOKEN}"
     local URL="https://api.buildkite.com/v2/organizations/${BUILDKITE_ORGANIZATION_SLUG}/pipelines/${BUILDKITE_PIPELINE_SLUG}/builds/${BUILDKITE_BUILD_NUMBER}"
-    curl -sfL -H "${TOKEN_HEADER}" "${URL}" | jq '.jobs[0].id' | tr -d '"'
-}
-export BUILDKITE_INITIAL_JOB_ID="$(get_initial_job_id)"
-if ! [[ "${BUILDKITE_INITIAL_JOB_ID}" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]]; then
-    die "Initial job ID does not look like a UUID: '${BUILDKITE_INITIAL_JOB_ID}'"
-fi
 
+    local CURL_OUTPUT=""
+    local CURL_UUID=""
+    for idx in 1 2 3; do
+        CURL_OUTPUT="$(curl -sfL -H "${TOKEN_HEADER}" "${URL}" || true)"
+        CURL_UUID="$(jq '.jobs[0].id' <<<"${CURL_OUTPUT}" | tr -d '"')"
+        if is_uuid "${CURL_UUID}"; then
+            echo -n "${CURL_UUID}"
+            return
+        fi
+        echo "ERROR: Initial job ID output invalid:\n${CURL_OUTPUT}" >&2
+        echo "Retrying up to $((3 - $idx)) more times before failing out..." >&2
+    done
+    die "Initial job ID does not look like a UUID: '${CURL_UUID}'"
+}
+
+export BUILDKITE_INITIAL_JOB_ID="$(get_initial_job_id)"
 function set_cryptic_privileged() {
     # The first thing we do is export a base64-encoded form of the keys for later consumption by the cryptic plugin
     echo "Privileged build detected; unlocking private key"
