@@ -92,6 +92,19 @@ function expandpath() {
     echo -n "${1/#\~/$HOME}"
 }
 
+# MSYS2 usually converts paths for us, but in the case of openssl's
+# -pass file:/path/to/file argument style, it fails.  So we manually
+# detect running on MSYS2 here, and invoke `cygpath -w` ourselves:
+if [[ "$(uname)" == MINGW* ]]; then
+    function winpath() {
+        cygpath -w "$1"
+    }
+else
+    function winpath() {
+        echo -n "$1"
+    }
+fi
+
 ##############################################################################
 ##############                base64 utilities                  ##############
 ##############################################################################
@@ -163,11 +176,11 @@ function is_aes_key() {
 
 # Encrypt something using AES with the symmetric key as the first argument
 function encrypt_aes() {
-    openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -pass "file:${1}"
+    openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -pass "file:$(winpath ${1})"
 }
 # Decrypt something using AES with the symmetric key as the first argument
 function decrypt_aes() {
-    openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass "file:${1}"
+    openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass "file:$(winpath ${1})"
 }
 
 # Decrypt an AES key ($2) with an RSA key ($1), then use it to encrypt stdin
