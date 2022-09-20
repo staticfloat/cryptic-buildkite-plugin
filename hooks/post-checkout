@@ -1,6 +1,8 @@
 #!/bin/bash
 
 ## post-checkout hook: This hook performs the actual decryption of secrets
+PS4="| "
+set -x
 
 # Load common tools
 CRYPTIC_REPO="$( cd "$( dirname "$( dirname "${BASH_SOURCE[0]}" )" )" &> /dev/null && pwd )"
