@@ -20,7 +20,7 @@ function die() {
 }
 
 # Returns true if verbose mode is enabled
-VERBOSE="${VERBOSE:-false}"
+VERBOSE="${BUILDKITE_PLUGIN_CRYPTIC_VERBOSE:-${VERBOSE:-false}}"
 function verbose() {
     [[ "${VERBOSE}" == "true" ]]
 }
