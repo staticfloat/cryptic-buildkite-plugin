@@ -130,7 +130,8 @@ function extract_plugin_treehashes() {
                 INPUT_TREEHASHES=( "$(calc_treehash <<<"${PIPELINE_PATH}")" )
 
                 # Next, calculate the treehash of the rest of the glob patterns
-                for PATTERN in $(shyaml -q get-values "inputs" <<<"${PIPELINE}" || true); do
+                readarray -d '' PATTERNS -t < <(shyaml -q get-values-0 "inputs" <<<"${PIPELINE}")
+                for PATTERN in "${PATTERNS[@]}"; do
                     HASH="$(collect_glob_pattern "${PATTERN}" | calc_treehash)"
                     vecho "       + ${HASH} <- ${PATTERN}"
                     INPUT_TREEHASHES+=( "${HASH}" )
