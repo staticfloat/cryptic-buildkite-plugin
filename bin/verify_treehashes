@@ -32,7 +32,6 @@ for YAML_PATH in ${YAML_PATHS[@]}; do
         PIPELINE_TREEHASH_FILESOURCE="$(cut -d'&' -f4 <<<"${TRIPLET}" | tr -d '"')"
 
         # Compare decrypted treehash with calculated treehash
-        vecho "About to decrypt ${PIPELINE_ENCRYPTED_TREEHASH} with ${REPO_KEY_PATH}"
         PIPELINE_DECRYPTED_TREEHASH="$(base64dec <<<"${PIPELINE_ENCRYPTED_TREEHASH}" | decrypt_aes "${REPO_KEY_PATH}" 2>/dev/null || true)"
         if [[ "${PIPELINE_DECRYPTED_TREEHASH}" == "${PIPELINE_TREEHASH}" ]]; then
             echo "[${YAML_PATH}] -> ${PIPELINE_PATH}: ✔️"
