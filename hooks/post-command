@@ -45,13 +45,18 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
 
     # Hash up the inputs
     readarray -d '' -t PIPELINE_INPUTS < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_SIGNED_PIPELINES_${PIPELINE_IDX}_INPUTS")
+    vecho " -> Performing pipeline launch:"
+    vecho "    -> ${PIPELINE_PATH}"
     INPUT_TREEHASHES=( "$(calc_treehash <<<"${PIPELINE_PATH}")" )
     for PATTERN in "${PIPELINE_INPUTS[@]}"; do
-        INPUT_TREEHASHES+=( "$(collect_glob_pattern "${PATTERN}" | calc_treehash)" )
+        HASH="$(collect_glob_pattern "${PATTERN}" | calc_treehash)"
+        vecho "       + ${HASH} <- ${PATTERN}"
+        INPUT_TREEHASHES+=( "${HASH}" )
     done
 
     # Hash all treehashes together to get full input hash
     FULL_TREEHASH="$(printf "%s" "${INPUT_TREEHASHES[@]}" | calc_shasum)"
+    vecho "       ∟ ${FULL_TREEHASH}"
 
     # Verify this with the treehash signature
     SIGNATURE_VAR="BUILDKITE_PLUGIN_CRYPTIC_SIGNED_PIPELINES_${PIPELINE_IDX}_SIGNATURE"

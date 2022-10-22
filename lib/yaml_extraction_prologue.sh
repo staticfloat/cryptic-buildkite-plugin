@@ -123,16 +123,22 @@ function extract_plugin_treehashes() {
                 # For each signed pipeline, get its pipeline path and its inputs
                 PIPELINE_PATH="$(shyaml -q get-value "pipeline" <<<"${PIPELINE}" || true)"
 
+                vecho " -> Found pipeline launch:"
+                vecho "    -> ${PIPELINE_PATH}"
+
                 # Start by calculating the treehash of the yaml file
                 INPUT_TREEHASHES=( "$(calc_treehash <<<"${PIPELINE_PATH}")" )
 
                 # Next, calculate the treehash of the rest of the glob patterns
                 for PATTERN in $(shyaml -q get-values "inputs" <<<"${PIPELINE}" || true); do
-                    INPUT_TREEHASHES+=( "$(collect_glob_pattern "${PATTERN}" | calc_treehash)" )
+                    HASH="$(collect_glob_pattern "${PATTERN}" | calc_treehash)"
+                    vecho "       + ${HASH} <- ${PATTERN}"
+                    INPUT_TREEHASHES+=( "${HASH}" )
                 done
 
                 # Calculate full treehash
                 FULL_TREEHASH="$(printf "%s" "${INPUT_TREEHASHES[@]}" | calc_shasum)"
+                vecho "       ∟ ${FULL_TREEHASH}"
 
                 # If `signature_file` is defined, use it!
                 local BASE64_ENCRYPTED_TREEHASH=""
