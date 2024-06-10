@@ -45,13 +45,18 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
 
     # Hash up the inputs
     readarray -d '' -t PIPELINE_INPUTS < <(collect_buildkite_array "BUILDKITE_PLUGIN_CRYPTIC_SIGNED_PIPELINES_${PIPELINE_IDX}_INPUTS")
+    vecho " -> Performing pipeline launch:"
+    vecho "    -> ${PIPELINE_PATH}"
     INPUT_TREEHASHES=( "$(calc_treehash <<<"${PIPELINE_PATH}")" )
     for PATTERN in "${PIPELINE_INPUTS[@]}"; do
-        INPUT_TREEHASHES+=( "$(collect_glob_pattern "${PATTERN}" | calc_treehash)" )
+        HASH="$(collect_glob_pattern "${PATTERN}" | calc_treehash)"
+        vecho "       + ${HASH} <- ${PATTERN}"
+        INPUT_TREEHASHES+=( "${HASH}" )
     done
 
     # Hash all treehashes together to get full input hash
     FULL_TREEHASH="$(printf "%s" "${INPUT_TREEHASHES[@]}" | calc_shasum)"
+    vecho "       ∟ ${FULL_TREEHASH}"
 
     # Verify this with the treehash signature
     SIGNATURE_VAR="BUILDKITE_PLUGIN_CRYPTIC_SIGNED_PIPELINES_${PIPELINE_IDX}_SIGNATURE"
@@ -75,7 +80,6 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
     fi
     if [[ "$(decrypt_aes "${UNENCRYPTED_REPO_KEY_PATH}" <"${SIGNATURE_FILE}")" != "${FULL_TREEHASH}" ]]; then
         SIGNATURE_FAIL_MSG="Pipeline '${PIPELINE_PATH}' fails treehash signature check!  You may need to re-run cryptic/bin/sign_treehashes!"
-        echo "${SIGNATURE_FAIL_MSG}" >&2
 
         HASH_OVERRIDE_VAR="BUILDKITE_PLUGIN_CRYPTIC_SIGNED_PIPELINES_${PIPELINE_IDX}_ALLOW_HASH_OVERRIDE"
         if [[ -v "${HASH_OVERRIDE_VAR}" ]] && [[ "${!HASH_OVERRIDE_VAR}" == "true" ]]; then
@@ -103,7 +107,7 @@ for PIPELINE_IDX in "${!SIGNED_PIPELINES[@]}"; do
         else
             # Execute `die` in a subshell so that we can print out failure messages for each pipeline,
             # then fail out once at the end, ignoring the `exit` and failure that it creates.
-            (die "Refusing to continue execution; pipeline '${PIPELINE_PATH}' fails treehash signature check!  You may need to re-run cryptic/bin/sign_treehashes!"; ) || true
+            (die "${SIGNATURE_FAIL_MSG}"; ) || true
             SHOULD_FAIL=true
             continue
         fi

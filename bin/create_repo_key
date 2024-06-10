@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 ## This script creates a "repository key".  This key is stored, encrypted, within a special folder
 ## that the agent knows to look inside of when decrypting secrets.  It also sets the repository up

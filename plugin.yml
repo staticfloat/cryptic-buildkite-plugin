@@ -41,4 +41,8 @@ configuration:
     unsigned_pipelines:
       type: array
 
+    # Set this to allow for greater verbosity in the cryptic plugin's output
+    verbose:
+      type: bool
+
   additionalProperties: false

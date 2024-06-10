@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -eou pipefail
 shopt -s extglob
@@ -20,7 +20,7 @@ function die() {
 }
 
 # Returns true if verbose mode is enabled
-VERBOSE="${VERBOSE:-false}"
+VERBOSE="${BUILDKITE_PLUGIN_CRYPTIC_VERBOSE:-${VERBOSE:-false}}"
 function verbose() {
     [[ "${VERBOSE}" == "true" ]]
 }
@@ -439,6 +439,10 @@ function find_repository_root() {
 }
 
 function find_repo_key() {
+    if [[ -v "REPO_KEY_PATH" ]]; then
+        return
+    fi
+
     # First, check to see if we have a decrypted repo key:
     REPO_KEY_PATH="${REPO_ROOT}/.buildkite/cryptic_repo_keys/repo_key"
     if [[ -f "${REPO_KEY_PATH}" ]]; then
