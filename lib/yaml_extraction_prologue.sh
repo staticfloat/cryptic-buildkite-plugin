@@ -6,26 +6,49 @@ if ! which shyaml >/dev/null 2>/dev/null; then
 fi
 
 
-# Extract the `variables:` section of a cryptic `pipeline.yml` plugin section
-function extract_encrypted_variables() {
+# Calculate the treehashes of each signed pipeline defined within a launching `.yml` file,
+# also returning the signature if it exists, (blank string if it doesn't)
+function invoke_func_on_steps() {
+    # Most of our paths are relative to the root directory, so this is just easier
+    pushd "${REPO_ROOT}" >/dev/null
+
     # Iterate over the steps in the yaml file
     (shyaml -q get-values-0 steps <"${1}" || true) |
     while IFS='' read -r -d '' STEP; do
-        # For each step, get its list of plugins
-        (shyaml -q get-values-0 plugins <<<"${STEP}" || true) |
-        while IFS='' read -r -d '' PLUGINS; do
-            # Get the plugin names
-            (shyaml -q keys-0 <<<"${PLUGINS}" || true) |
-            while IFS='' read -r -d '' PLUGIN_NAME; do
-                # Skip plugins that are not named `cryptic`
-                if [[ "${PLUGIN_NAME}" != staticfloat/cryptic* ]]; then
-                    continue
-                fi
-                # For each plugin, if its `cryptic`, extract the variables
-                (shyaml -q get-values-0 "${PLUGIN_NAME}.variables" <<<"${PLUGINS}" || true) |
-                while IFS='' read -r -d '' VAR; do
-                    printf "%s\n" "${VAR}"
-                done
+        # If this step is a `group` step, let's iterate over each of its steps
+        if shyaml -q get-value 'group' >/dev/null <<<"${STEP}"; then
+            (shyaml -q get-values-0 steps <<<"${STEP}" || true) |
+            while IFS='' read -r -d '' INNER_STEP; do
+                "${2}" "${INNER_STEP}"
+            done
+        else
+            "${2}" "${STEP}"
+        fi
+    done
+
+    popd >/dev/null
+}
+
+
+# Extract the `variables:` section of a cryptic `pipeline.yml` plugin section
+function extract_encrypted_variables() {
+    invoke_func_on_steps "${1}" extract_encrypted_variables_from_step
+}
+
+function extract_encrypted_variables_from_step() {
+    (shyaml -q get-values-0 plugins <<<"${1}" || true) |
+    while IFS='' read -r -d '' PLUGINS; do
+        # Get the plugin names
+        (shyaml -q keys-0 <<<"${PLUGINS}" || true) |
+        while IFS='' read -r -d '' PLUGIN_NAME; do
+            # Skip plugins that are not named `cryptic`
+            if [[ "${PLUGIN_NAME}" != staticfloat/cryptic* ]]; then
+                continue
+            fi
+            # For each plugin, if its `cryptic`, extract the variables
+            (shyaml -q get-values-0 "${PLUGIN_NAME}.variables" <<<"${PLUGINS}" || true) |
+            while IFS='' read -r -d '' VAR; do
+                printf "%s\n" "${VAR}"
             done
         done
     done
@@ -42,6 +65,10 @@ function extract_adhoc_encrypted_variables() {
     done
 
     # Iterate over the steps in the yaml file
+    invoke_func_on_steps "${1}" extract_adhoc_encrypted_variables_from_step
+}
+
+function extract_adhoc_encrypted_variables_from_step() {
     (shyaml -q get-values-0 steps <"${1}" || true) |
     while IFS='' read -r -d '' STEP; do
         (shyaml -q keys-0 env <<<"${STEP}" || true) |
@@ -55,57 +82,38 @@ function extract_adhoc_encrypted_variables() {
 
 # Extract the `files:` section of a cryptic `pipeline.yml` plugin section
 function extract_encrypted_files() {
-    # Iterate over the steps in the yaml file
-    (shyaml -q get-values-0 steps <"${1}" || true) |
-    while IFS='' read -r -d '' STEP; do
-        # For each step, get its list of plugins
-        (shyaml -q get-values-0 plugins <<<"${STEP}" || true) |
-        while IFS='' read -r -d '' PLUGINS; do
-            # Get the plugin names
-            (shyaml -q keys-0 <<<"${PLUGINS}" || true) |
-            while IFS='' read -r -d '' PLUGIN_NAME; do
-                # Skip plugins that are not named `cryptic`
-                if [[ "${PLUGIN_NAME}" != staticfloat/cryptic* ]]; then
-                    continue
-                fi
-                # For each plugin, if its `cryptic`, extract the files
-                (shyaml -q get-values-0 "${PLUGIN_NAME}.files" <<<"${PLUGINS}" || true) |
-                while IFS='' read -r -d '' FILE; do
-                    FILE="$(echo ${FILE} | tr -d '"')"
-                    printf "%s\n" "${FILE}"
-                done
+    invoke_func_on_steps "${1}" extract_encrypted_files_from_step
+}
+
+function extract_encrypted_files_from_step() {
+    # For each step, get its list of plugins
+    (shyaml -q get-values-0 plugins <<<"${1}" || true) |
+    while IFS='' read -r -d '' PLUGINS; do
+        # Get the plugin names
+        (shyaml -q keys-0 <<<"${PLUGINS}" || true) |
+        while IFS='' read -r -d '' PLUGIN_NAME; do
+            # Skip plugins that are not named `cryptic`
+            if [[ "${PLUGIN_NAME}" != staticfloat/cryptic* ]]; then
+                continue
+            fi
+            # For each plugin, if its `cryptic`, extract the files
+            (shyaml -q get-values-0 "${PLUGIN_NAME}.files" <<<"${PLUGINS}" || true) |
+            while IFS='' read -r -d '' FILE; do
+                FILE="$(echo ${FILE} | tr -d '"')"
+                printf "%s\n" "${FILE}"
             done
         done
-    done    
+    done
 }
 
 # Calculate the treehashes of each signed pipeline defined within a launching `.yml` file,
 # also returning the signature if it exists, (blank string if it doesn't)
 function extract_pipeline_treehashes() {
-    # Most of our paths are relative to the root directory, so this is just easier
-    pushd "${REPO_ROOT}" >/dev/null
-
     vecho "Extracting treehashes from '${YAML_PATH}'"
-
-    # Iterate over the steps in the yaml file
-    (shyaml -q get-values-0 steps <"${1}" || true) |
-    while IFS='' read -r -d '' STEP; do
-        # If this step is a `group` step, let's iterate over each of its steps
-        if shyaml -q get-value 'group' >/dev/null <<<"${STEP}"; then
-            (shyaml -q get-values-0 steps <<<"${STEP}" || true) |
-            while IFS='' read -r -d '' INNER_STEP; do
-                extract_plugin_treehashes "${INNER_STEP}"
-            done
-        else
-            extract_plugin_treehashes "${STEP}"
-        fi
-    done
-
-    # Don't stay in `${REPO_ROOT}`
-    popd >/dev/null
+    invoke_func_on_steps "${1}" extract_treehashes_from_step
 }
 
-function extract_plugin_treehashes() {
+function extract_treehashes_from_step() {
     # Get the list of plugins
     (shyaml -q get-values-0 plugins <<<"${1}" || true) |
     while IFS='' read -r -d '' PLUGINS; do
