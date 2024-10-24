@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 ## This script creates an "agent keypair".  The private key is stored on an agent, and is used to
 ## encrypt/decrypt a per-repository symmetric key.
