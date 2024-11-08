@@ -479,7 +479,7 @@ function find_yaml_paths() {
 
     vecho "Searching for '.yml' files with the pattern '${YAML_SEARCH_PATH}'"
     readarray -d '' YAML_PATHS < <(collect_glob_pattern "${YAML_SEARCH_PATH}")
-    
+
     if [[ "${#YAML_PATHS[@]}" -lt 1 ]]; then
         die "Unable to find any .yml files in the given pattern '${YAML_SEARCH_PATH}'!"
     fi

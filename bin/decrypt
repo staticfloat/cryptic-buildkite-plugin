@@ -52,10 +52,10 @@ for YAML_PATH in ${YAML_PATHS[@]}; do
 
     # Start printing out the helpful debugging messages
     echo " -> Found ${#ENCRYPTED_VARIABLES[@]} encrypted variables, ${#ENCRYPTED_FILES[@]} files, and ${#ENCRYPTED_ADHOC_VARIABLES[@]} adhoc variables"
-    
+
 
     cat <<-EOD
-    
+
     When running with appropriate keys setup, the cryptic plugin
     will export the following environment variables:
 
@@ -77,7 +77,7 @@ EOD
         # Spacer for visual blocking
         echo
         echo
-        echo "And the following files:" 
+        echo "And the following files:"
 
         # Decrypt actual files
         for FILE_PATH in "${ENCRYPTED_FILES[@]}"; do
