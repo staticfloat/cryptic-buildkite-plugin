@@ -451,6 +451,9 @@ function find_repo_key() {
 
     # If we don't have a decrypted repo key, let's try decrypting one using an agent private key, if we have it
     if [[ -v "AGENT_PRIVATE_KEY_PATH" ]]; then
+        if [[ ! -f "${AGENT_PRIVATE_KEY_PATH}" ]]; then
+            die "Specified agent private key at '${AGENT_PRIVATE_KEY_PATH}' does not exist!"
+        fi
         RSA_FINGERPRINT=$(rsa_fingerprint "${AGENT_PRIVATE_KEY_PATH}")
         ENCRYPTED_REPO_KEY_PATH="${REPO_ROOT}/.buildkite/cryptic_repo_keys/repo_key.${RSA_FINGERPRINT:0:8}"
         if [[ -f "${ENCRYPTED_REPO_KEY_PATH}" ]]; then
