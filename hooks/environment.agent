@@ -144,7 +144,7 @@ function set_cryptic_privileged() {
         readarray -d';' -t ADHOC_PAIR <<<"${!LONG_ADHOC_NAME}"
 
         # Take the key, decrypt it with our RSA private key
-        base64dec <<<"${ADHOC_PAIR[0]}" | openssl rsautl -decrypt -inkey "${AGENT_PRIVATE_KEY_PATH}" > "${TEMP_KEYFILE}"
+        base64dec <<<"${ADHOC_PAIR[0]}" | openssl pkeyutl -decrypt -inkey "${AGENT_PRIVATE_KEY_PATH}" > "${TEMP_KEYFILE}"
 
         # Make sure the AES key is the right length
         if [[ $(wc -c <"${TEMP_KEYFILE}") != "128" ]]; then
