@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+## Decrypt a encrypted ad-hoc variable.
+
+# Load common tools
+CRYPTIC_REPO="$( dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" )"
+source "${CRYPTIC_REPO}/lib/argparse.sh"
+source "${CRYPTIC_REPO}/lib/common.sh"
+
+# Get the repository root and private key
+find_repository_root
+find_private_key
+
+# Read in encrypted value
+if [ "$#" -ge 1 ]; then
+    ENCRYPTED_VALUE="${1}"
+else
+    read -e -p "Encrypted value: " ENCRYPTED_VALUE
+fi
+
+# Decrypt it
+DECRYPTED_VALUE="$(decrypt_adhoc_value "${AGENT_PRIVATE_KEY_PATH}" <<<"${ENCRYPTED_VALUE}")"
+
+# Print it
+cat <<-EOD
+
+    Successfully decrypted the ad-hoc secret variable:
+
+        "${DECRYPTED_VALUE}"
+EOD
