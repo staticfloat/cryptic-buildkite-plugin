@@ -128,11 +128,11 @@ function randbase64() {
 
 # Encrypt something using RSA with the RSA public key as the first argument
 function encrypt_rsa() {
-    openssl rsautl -encrypt -pubin -inkey "${1}"
+    openssl pkeyutl -encrypt -pubin -inkey "${1}"
 }
 # Decrypt something using RSA with the RSA private key as the first argument
 function decrypt_rsa() {
-    openssl rsautl -decrypt -inkey "${1}"
+    openssl pkeyutl -decrypt -inkey "${1}"
 }
 
 # Sign something using RSA with the RSA key as the first argument
